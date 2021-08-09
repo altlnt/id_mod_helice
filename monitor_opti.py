@@ -18,6 +18,16 @@ base_path=os.path.join(os.getcwd(),"results")
 # %%  PLOT ONE OPTI
 opti_to_plot="5s_struc_all"
 
+def detect_nans(x,y):
+    nx,ny=[],[]
+    for j,i in enumerate(y):
+        if np.isnan(i):
+            nx.append(x[j])
+            ny.append(i)
+            
+    return nx,ny
+    
+
 def plot_opti(opti_to_plot):
     
     dirpath=os.path.join(base_path,opti_to_plot)
@@ -58,22 +68,37 @@ def plot_opti(opti_to_plot):
     score_ax=f.add_subplot(2,2,2)
     
     y0,y1,y2=data_dict['train_sc_a'],data_dict['val_sc_a'],data_dict['total_sc_a']
+
+    xnan0,y0nans=detect_nans(range(len(y0)), y0)
+    xnan1,y1nans=detect_nans(range(len(y1)), y1)
+    xnan2,y2nans=detect_nans(range(len(y2)), y2)
     x=range(len(y0))
-    y0,y1,y2=np.nan_to_num([y0,y1,y2],nan=-1.0)
-    score_ax.plot(x,y0,label="train_sc_a",marker="o")
-    score_ax.plot(x,y1,label="val_sc_a",marker="o")
-    score_ax.plot(x,y2,label="total_sc_a",marker="o")
-    score_ax.grid(),score_ax.legend()
+    y0,y1,y2=np.nan_to_num([y0,y1,y2],nan=0.0)
+    score_ax.plot(x,y0,label="train_sc_a")
+    score_ax.scatter(xnan0,y0nans,color="red")
+    score_ax.plot(x,y1,label="val_sc_a")
+    score_ax.scatter(xnan1,y1nans,color="red")
+    score_ax.plot(x,y2,label="total_sc_a")
+    score_ax.scatter(xnan2,y2nans,color="red")
+
+    score_ax.grid(),score_ax.legend(),score_ax.set_ylim(0,)
     
     score_vx=f.add_subplot(2,2,4)
 
     y0,y1,y2=data_dict['train_sc_v'],data_dict['val_sc_v'],data_dict['total_sc_v']
-    y0,y1,y2=np.nan_to_num([y0,y1,y2],nan=-1.0)
-    x=range(len(y0))
-    score_vx.plot(x,y0,label="train_sc_v",marker="o")
-    score_vx.plot(x,y1,label="val_sc_v",marker="o")
-    score_vx.plot(x,y2,label="total_sc_v",marker="o")
-    score_vx.grid(),score_vx.legend()
+    xnan0,y0nans=detect_nans(range(len(y0)), y0)
+    xnan1,y1nans=detect_nans(range(len(y1)), y1)
+    xnan2,y2nans=detect_nans(range(len(y2)), y2)
+    
+    y0,y1,y2=np.nan_to_num([y0,y1,y2],nan=0.0)
+    score_vx.plot(x,y0,label="train_sc_v")
+    score_ax.scatter(xnan0,y0nans,color="red")
+    score_vx.plot(x,y1,label="val_sc_v")
+    score_ax.scatter(xnan1,y1nans,color="red")
+    score_vx.plot(x,y2,label="total_sc_v")
+    score_ax.scatter(xnan2,y2nans,color="red")
+
+    score_vx.grid(),score_vx.legend(),score_vx.set_ylim(0,)
     
     j=0
     for i,k in enumerate(data.keys()):
@@ -94,4 +119,5 @@ def plot_opti(opti_to_plot):
 # %%  PLOT ALL optis
 
 list_optis=os.listdir("./results/")
+# list_optis=['fit_v_True_lr_0.001000_ns_-1.000000']
 [plot_opti(i) for i in list_optis]

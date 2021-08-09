@@ -11,12 +11,19 @@ def main_func(x):
     # generic booleans
     fit_arg,blr,ns=x[0],x[1],x[2]
     
-    model_motor_dynamics=True
     
-    used_logged_v_in_model=True
+    # generic booleans
+    
+    
+    "regresion on a"
     fit_on_v=fit_arg
-    
-    
+    used_logged_v_in_model=not fit_arg
+    base_lr=1.0 if  blr=="scipy" else blr
+
+    fit_strategy="scipy" if  blr=="scipy" else "custom_gradient"
+    nsecs=ns
+    model_motor_dynamics=True
+
     with_ct3=False
     vanilla_force_model=False
     
@@ -47,10 +54,7 @@ def main_func(x):
     id_wind=not assume_nul_wind
     id_time_const=model_motor_dynamics
     
-    base_lr=blr
-    normalize_grad=False
-    n_epochs=25
-    nsecs=ns
+    n_epochs=20
     train_proportion=0.8
     grad_autoscale=False
     
@@ -61,7 +65,8 @@ def main_func(x):
     # log_path="/logs/vol1_ext_alcore/log_real.csv"
     log_path="/logs/vol12/log_real_processed.csv"
     
-    log_name="fit_v_%s_lr_%f_ns_%f"%(str(fit_arg),blr,ns)    
+    log_name="25EPOCHS_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
+    
     
     mass=369 #batterie
     mass+=1640-114 #corps-carton
@@ -207,6 +212,7 @@ def main_func(x):
     
     # %%   ####### SYMPY PROBLEM 
     
+    import time
     
     t0=time.time()
     
@@ -571,22 +577,91 @@ def main_func(x):
     "splitting the dataset into nsecs sec minibatches"
     print("SPLIT DATA...")
     
-    N_minibatches=round(prep_data["t"].max()/nsecs) if nsecs >0 else  len(prep_data)# 22 for flight 1, ?? for flight 2
-    N_minibatches=N_minibatches if nsecs!='all' else 1
-    
-    "if you don't want to minibatch"
-    # N_minibatches=len(data_prepared)
-    data_batches=[i.drop(columns=[j for j in prep_data.keys() if (("level" in j ) or ("index") in j) ]) for i in np.array_split(prep_data, N_minibatches)]
-    # print(data_batches)
-    data_batches=[i.reset_index() for i in data_batches]
-    
-    N_train_batches=round(train_proportion*N_minibatches)
-    N_val_batches=N_minibatches-N_train_batches
+    if nsecs=='all':
+        data_batches=[prep_data]
+        N_train_batches=1
+        N_val_batches=0
+    else:
+        N_minibatches=round(prep_data["t"].max()/nsecs) if nsecs >0 else  len(prep_data)# 22 for flight 1, ?? for flight 2
+        N_minibatches=N_minibatches if nsecs!='all' else 1
+        
+        "if you don't want to minibatch"
+        # N_minibatches=len(data_prepared)
+        data_batches=[i.drop(columns=[j for j in prep_data.keys() if (("level" in j ) or ("index") in j) ]) for i in np.array_split(prep_data, N_minibatches)]
+        # print(data_batches)
+        data_batches=[i.reset_index() for i in data_batches]
+        
+        N_train_batches=round(train_proportion*N_minibatches)
+        N_val_batches=N_minibatches-N_train_batches
     print("DATA PROCESS DONE")
     
     # %%   ####### MODEL function
     import transforms3d as tf3d 
     
+    def arg_wrapping(batch,id_variables,scalers,data_index,speed_pred_previous,omegas_pred):
+        i=data_index
+        
+        cost_scaler_v=max(batch['speed[0]']**2+batch['speed[1]']**2+batch['speed[2]']**2)
+        cost_scaler_a=max(batch['acc[0]']**2+batch['acc[1]']**2+batch['acc[2]']**2)
+    
+        dt=min(batch['dt'][i],1e-2)
+        m=mass
+        vlog_i,vlog_j,vlog_k=batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i]
+        vpred_i,vpred_j,vpred_k=speed_pred_previous 
+        alog_i,alog_j,alog_k=batch['acc_ned_grad[0]'][i],batch['acc_ned_grad[1]'][i],batch['acc_ned_grad[2]'][i]
+        vnext_i,vnext_j,vnext_k=batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i]
+        
+        m=non_id_variables['m'] if 'm' in non_id_variables else id_variables['m']
+        vw_i=non_id_variables['vw_i'] if 'vw_i' in non_id_variables else id_variables['vw_i']
+        vw_j=non_id_variables['vw_j'] if 'vw_j' in non_id_variables else id_variables['vw_j']
+        kt=non_id_variables['kt'] if 'kt' in non_id_variables else id_variables['kt']
+        b1=non_id_variables['b1'] if 'b1' in non_id_variables else id_variables['b1']
+        c1=non_id_variables['c1'] if 'c1' in non_id_variables else id_variables['c1']
+        c2=non_id_variables['c2'] if 'c2' in non_id_variables else id_variables['c2']
+        c3=non_id_variables['c3'] if 'c3' in non_id_variables else id_variables['c3']
+        ch1=non_id_variables['ch1'] if 'ch1' in non_id_variables else id_variables['ch1']
+        ch2=non_id_variables['ch2'] if 'ch2' in non_id_variables else id_variables['ch2']
+        di=non_id_variables['di'] if 'di' in non_id_variables else id_variables['di']
+        dj=non_id_variables['dj'] if 'dj' in non_id_variables else id_variables['dj']
+        dk=non_id_variables['dk'] if 'dk' in non_id_variables else id_variables['dk']
+        rho=non_id_variables['rho'] if 'rho' in non_id_variables else id_variables['rho']
+        A=non_id_variables['A'] if 'A' in non_id_variables else id_variables['A']
+        r=non_id_variables['r'] if 'r' in non_id_variables else id_variables['r']
+        
+        R=tf3d.quaternions.quat2mat(np.array([batch['q[%i]'%(j)][i] for j in range(4)]))
+        
+        omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6=np.array([batch['omega_c[%i]'%(j)][i] for j in range(1,7,1)])
+        omega_1,omega_2,omega_3,omega_4,omega_5,omega_6=omegas_pred
+                
+        m_scale=scalers['m']
+        A_scale=scalers['A']
+        r_scale=scalers['r']
+        c1_scale,c2_scale,c3_scale=scalers['c1'],scalers['c2'],scalers['c3']
+        ch1_scale,ch2_scale=scalers['ch1'],scalers['ch2']
+        di_scale,dj_scale,dk_scale=scalers['di'],scalers['dj'],scalers['dk']
+        vw_i_scale,vw_j_scale=scalers['vw_i'],scalers['vw_j']
+        kt_scale=scalers['kt']
+        
+        X=(m,A,r,rho,
+        b1,
+        c1,c2,c3,
+        ch1,ch2,
+        di,dj,dk,
+        vw_i,vw_j,
+        kt,
+        dt,cost_scaler_a,cost_scaler_v,
+        vlog_i,vlog_j,vlog_k,
+        vpred_i,vpred_j,vpred_k,
+        alog_i,alog_j,alog_k,
+        vnext_i,vnext_j,vnext_k,*R.flatten(),
+        omega_1,omega_2,omega_3,omega_4,omega_5,omega_6,
+        omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6,
+        m_scale,A_scale,r_scale,c1_scale,c2_scale,c3_scale,
+        ch1_scale,ch2_scale,di_scale,dj_scale,dk_scale,
+        vw_i_scale,vw_j_scale,kt_scale)
+        
+        return X
+        
     def pred_on_batch(batch,id_variables,scalers):
     
         acc_pred=np.zeros((len(batch),3))
@@ -598,72 +673,15 @@ def main_func(x):
         jac_error_a=np.zeros((len(batch),len(id_variables)))
         jac_error_v=np.zeros((len(batch),len(id_variables)))
         
-        
-        cost_scaler_v=max(batch['speed[0]']**2+batch['speed[1]']**2+batch['speed[2]']**2)
-        cost_scaler_a=max(batch['acc[0]']**2+batch['acc[1]']**2+batch['acc[2]']**2)
-        
         for i in batch.index:
             print("\r Pred on batch %i / %i "%(i,max(batch.index)), end='', flush=True)
-            dt=min(batch['dt'][i],1e-2)
-            m=mass
-            vlog_i,vlog_j,vlog_k=batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i]
-            vpred_i,vpred_j,vpred_k=speed_pred[i-1] if i>min(batch.index) else (batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i])
-            alog_i,alog_j,alog_k=batch['acc_ned_grad[0]'][i],batch['acc_ned_grad[1]'][i],batch['acc_ned_grad[2]'][i]
-            vnext_i,vnext_j,vnext_k=batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i]
-            
-            m=non_id_variables['m'] if 'm' in non_id_variables else id_variables['m']
-            vw_i=non_id_variables['vw_i'] if 'vw_i' in non_id_variables else id_variables['vw_i']
-            vw_j=non_id_variables['vw_j'] if 'vw_j' in non_id_variables else id_variables['vw_j']
-            kt=non_id_variables['kt'] if 'kt' in non_id_variables else id_variables['kt']
-            b1=non_id_variables['b1'] if 'b1' in non_id_variables else id_variables['b1']
-            c1=non_id_variables['c1'] if 'c1' in non_id_variables else id_variables['c1']
-            c2=non_id_variables['c2'] if 'c2' in non_id_variables else id_variables['c2']
-            c3=non_id_variables['c3'] if 'c3' in non_id_variables else id_variables['c3']
-            ch1=non_id_variables['ch1'] if 'ch1' in non_id_variables else id_variables['ch1']
-            ch2=non_id_variables['ch2'] if 'ch2' in non_id_variables else id_variables['ch2']
-            di=non_id_variables['di'] if 'di' in non_id_variables else id_variables['di']
-            dj=non_id_variables['dj'] if 'dj' in non_id_variables else id_variables['dj']
-            dk=non_id_variables['dk'] if 'dk' in non_id_variables else id_variables['dk']
-            rho=non_id_variables['rho'] if 'rho' in non_id_variables else id_variables['rho']
-            A=non_id_variables['A'] if 'A' in non_id_variables else id_variables['A']
-            r=non_id_variables['r'] if 'r' in non_id_variables else id_variables['r']
-            
-            R=tf3d.quaternions.quat2mat(np.array([batch['q[%i]'%(j)][i] for j in range(4)]))
-            
-            omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6=np.array([batch['omega_c[%i]'%(j)][i] for j in range(1,7,1)])
-            omega_1,omega_2,omega_3,omega_4,omega_5,omega_6=omegas[i-1] if i>0 else np.array([batch['omega_c[%i]'%(j)][i] for j in range(1,7,1)])
-                    
-            m_scale=scalers['m']
-            A_scale=scalers['A']
-            r_scale=scalers['r']
-            c1_scale,c2_scale,c3_scale=scalers['c1'],scalers['c2'],scalers['c3']
-            ch1_scale,ch2_scale=scalers['ch1'],scalers['ch2']
-            di_scale,dj_scale,dk_scale=scalers['di'],scalers['dj'],scalers['dk']
-            vw_i_scale,vw_j_scale=scalers['vw_i'],scalers['vw_j']
-            kt_scale=scalers['kt']
-            
-            X=(m,A,r,rho,
-            b1,
-            c1,c2,c3,
-            ch1,ch2,
-            di,dj,dk,
-            vw_i,vw_j,
-            kt,
-            dt,cost_scaler_a,cost_scaler_v,
-            vlog_i,vlog_j,vlog_k,
-            vpred_i,vpred_j,vpred_k,
-            alog_i,alog_j,alog_k,
-            vnext_i,vnext_j,vnext_k,*R.flatten(),
-            omega_1,omega_2,omega_3,omega_4,omega_5,omega_6,
-            omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6,
-            m_scale,A_scale,r_scale,c1_scale,c2_scale,c3_scale,
-            ch1_scale,ch2_scale,di_scale,dj_scale,dk_scale,
-            vw_i_scale,vw_j_scale,kt_scale)
-        
-            # print(*X)
-            # input("OUI?")
+    
+            speed_pred_prev=speed_pred[i-1] if i>min(batch.index) else (batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i])
+            omegas_pred=omegas[i-1] if i>0 else np.array([batch['omega_c[%i]'%(j)][i] for j in range(1,7,1)])
+            X=arg_wrapping(batch,id_variables,scalers,i,speed_pred_prev,omegas_pred)
+    
             Y=model_func(*X)
-            # print(Y)
+    
             acc_pred[i]=Y[:3].reshape(3,)
             speed_pred[i]=Y[3:6].reshape(3,)
             omegas[i]=Y[6:12].reshape(6,)
@@ -695,7 +713,37 @@ def main_func(x):
             new_dic[key]=np.clip(id_variables[key]-lr*used_jac[i],bounds[key][0],bounds[key][1])
             
         return new_dic
+    
+    def X_to_dict(X,keys_=id_variables.keys()):
+        out_dict={}
+        for i,key in enumerate(keys_):
+            out_dict[key]=X[i]
+        return out_dict
+    
+    def dict_to_X(input_dict):
+        return np.array([input_dict[key] for key in input_dict])
+    
+    def fun_cost_scipy(X,batch,scalers):
+        
+        "X is the dict_to_X of id_variables"
+        "dict reconstruction "
+        
+        id_var=X_to_dict(X)
+        
+        acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch,id_var,scalers)
+        
+        used_jac=jac_error_v if fit_on_v else jac_error_a
+        used_err=square_error_v if fit_on_v else square_error_a
+        J,C=np.mean(used_jac,axis=0),np.mean(used_err,axis=0)
+        
+        toplot=pd.DataFrame(data=[J,[id_var[k]*scalers[k] for k in id_variables.keys()]],columns=id_variables.keys(),index=['J','value'])
+        print("\n ------ Cost (in scipy minim): %f\n"%(C))
+        print(toplot.transpose())
+        
+        return C,J
+    
     # %% Train loop
+    from scipy.optimize import minimize
     
     def train_loop(data_batches,id_var,n_epochs=n_epochs):
     
@@ -704,7 +752,7 @@ def main_func(x):
         temp_shuffled_batches=copy.deepcopy(data_batches)
         print("Done")
         print("INIT")
-        ti0=time.time()
+    
         # acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(data_prepared,id_variables)
         # print("Inference on full dataset takes : %i"%(round(time.time()-ti0)))
         
@@ -735,6 +783,7 @@ def main_func(x):
               val_sc_v=-1,
               total_sc_a=total_sc_a,
               total_sc_v=total_sc_v)
+        
         print("Entering training loop...")
         for n in range(n_epochs):
             "begin epoch"
@@ -747,23 +796,42 @@ def main_func(x):
             
             
             for k,batch_ in enumerate(temp_shuffled_batches[:N_train_batches]):
+                if fit_strategy not in ('custom_gradient','scipy'):
+                    print(" ERROR WRONG FIT STRATEGY !!!!")
+                    break
+                                        
+                if fit_strategy=="custom_gradient":
                 
-                
-                acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
-                # print(acc_pred,speed_pred,omegas)
-                id_variables=propagate_gradient(jac_error_v if fit_on_v else jac_error_a,id_variables)
-                
-                train_sc_a+=np.mean(square_error_a,axis=0)
-                train_sc_v+=np.mean(square_error_v,axis=0)
-                print(" EPOCH : %i/%i || Train batch : %i/%i || PROGRESS: %i/%i [ta,tv]=[%f,%f]"%(n,
-                                                                                                  n_epochs,
-                                                                                                  k,N_train_batches,
-                                                                                                  k,len(temp_shuffled_batches),
-                                                                                                  np.mean(square_error_a,axis=0),
-                                                                                                  np.mean(square_error_v,axis=0)))
-            
-                # print("id_variables=",id_variables)                                                                                
-    
+                    acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
+                    id_variables=propagate_gradient(jac_error_v if fit_on_v else jac_error_a,id_variables)
+                    
+                    train_sc_a+=np.mean(square_error_a,axis=0)
+                    train_sc_v+=np.mean(square_error_v,axis=0)
+                    print(" EPOCH : %i/%i || Train batch : %i/%i || PROGRESS: %i/%i [ta,tv]=[%f,%f]"%(n,
+                                                                                                      n_epochs,
+                                                                                                      k,N_train_batches,
+                                                                                                      k,len(temp_shuffled_batches),
+                                                                                                      np.mean(square_error_a,axis=0),
+                                                                                                      np.mean(square_error_v,axis=0)))
+                elif fit_strategy=="scipy":
+                    
+                    X_start=dict_to_X(id_variables)
+                    bnds=[bounds[i] for i in id_variables]     
+                    sol_scipy=minimize(fun_cost_scipy,
+                                       X_start,
+                                       args=(batch_,scalers),
+                                       bounds=bnds,
+                                       jac=True,
+                                       options={"maxiter":10})
+                    id_variables=X_to_dict(sol_scipy["x"])
+                    current_score=sol_scipy["fun"]
+                    current_score_label="tv" if fit_on_v else "ta"
+                    print(" EPOCH : %i/%i || Train batch : %i/%i || PROGRESS: %i/%i [%s]=[%f]"%(n,
+                                                                                                      n_epochs,
+                                                                                                      k,N_train_batches,
+                                                                                                      k,len(temp_shuffled_batches),
+                                                                                                      current_score_label,
+                                                                                                      current_score))        
             for k,batch_ in enumerate(temp_shuffled_batches[N_train_batches:]):
     
                 acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
@@ -813,17 +881,22 @@ def main_func(x):
                   total_sc_v=total_sc_v)
             
     train_loop(data_batches,id_variables,n_epochs=n_epochs)
+    return 0
 
 from multiprocessing import Pool
 
 if __name__ == '__main__':
-
+    
+    # blr_range=['scipy',1e-2]
+    # ns_range=['all',25,5,-1]
+    # fit_arg_range=[True,False]
+    
+    blr_range=['scipy',1e-2]
+    ns_range=['all',-1,5,25]
     fit_arg_range=[True,False]
-    blr_range=[1e-3,1e-2,1e-1]
-    ns_range=[-1,1,2,5,25,'all']
+    
+    x_r=[[i,j,k] for j in blr_range for i in  fit_arg_range  for k in ns_range ]
 
-    x_r=[[i,j,k] for i in  fit_arg_range for j in blr_range for k in ns_range ]
-
-    pool = Pool(processes=12)
+    pool = Pool(processes=16)
     pool.map(main_func, x_r)
 
