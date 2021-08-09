@@ -8,7 +8,7 @@ import sys
 model_motor_dynamics=True
 used_logged_v_in_model=True
 with_ct3=False
-vanilla_force_model=False
+vanilla_force_model=True
 
 structural_relation_idc1=False
 structural_relation_idc2=False
@@ -298,7 +298,7 @@ v3=symbols('v3')
 v2=symbols("v2")
 
 if vanilla_force_model:
-    T_sum=-c1_s*sum([ omegas[i]**2 for i in range(6)])*R.T*k_vect
+    T_sum=-c1_s*sum([ omegas[i]**2 for i in range(6)])*R@k_vect
     H_sum=0*k_vect
 else:
 
@@ -322,7 +322,7 @@ else:
     def et(expr):
         return expr.subs(v3,va_body[2,0]).subs(v2,sqrt(va_body[0,0]**2+va_body[1,0]**2))
     
-    T_sum=-simplify(sum([et(T_BET).subs(omega,omegas[i]).subs(vi,etas[i]) for i in range(6)]))*R.T*k_vect
+    T_sum=-simplify(sum([et(T_BET).subs(omega,omegas[i]).subs(vi,etas[i]) for i in range(6)]))*R@k_vect
     
     H_tmp=simplify(sum([r_s*omegas[i]*ch1_s+ch2_s*(etas[i]-va_body[2,0]) for i in range(6)]))
     H_sum=-rho*A_s*H_tmp*(va_NED-va_NED.dot(k_vect)*k_vect)
@@ -622,7 +622,6 @@ def pred_on_batch(batch,id_variables,scalers):
         omega_1,omega_2,omega_3,omega_4,omega_5,omega_6=omegas[i-1] if i>0 else np.array([batch['omega_c[%i]'%(j)][i] for j in range(1,7,1)])
         
         
-        
         m_scale=scalers['m']
         A_scale=scalers['A']
         r_scale=scalers['r']
@@ -731,8 +730,8 @@ def test_params(batch,id_variables):
 
     return acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v
     
-id_variables['c1']=0.018828
-id_variables['c2']=0.106840
+id_variables['c1']=6.0e-6
+# id_variables['c2']=0.106840
 
 id_variables['di']=0.0
 id_variables['dj']=0.0

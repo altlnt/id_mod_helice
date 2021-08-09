@@ -41,17 +41,20 @@ id_body_liftdrag_coeffs=True
 id_wind=not assume_nul_wind
 id_time_const=model_motor_dynamics
 
-base_lr=1e-3
+base_lr=1.0
 normalize_grad=False
-n_epochs=250
-nsecs=5
+n_epochs=25
+nsecs=25
 train_proportion=0.8
 grad_autoscale=False
 
 
 # Log path
 
-log_path="/logs/vol1_ext_alcore/log_real.csv"
+# log_path="/logs/vol1_ext_alcore/log_real.csv"
+# log_path="/logs/vol1_ext_alcore/log_real.csv"
+log_path="/logs/vol12/log_real_processed.csv"
+
 log_name=""
 
 
@@ -127,11 +130,11 @@ scalers['r']=1.0
 scalers['c1']=1.0e-2
 scalers['c2']=1.0e-1
 scalers['c3']=1.0
-scalers['ch1']=1.0e-1
-scalers['ch2']=1.0e-1
-scalers['di']=1.0e1
-scalers['dj']=1.0e1
-scalers['dk']=1.0e1
+scalers['ch1']=5.0e-1
+scalers['ch2']=5.0e-1
+scalers['di']=5.0e1
+scalers['dj']=5.0e1
+scalers['dk']=5.0e1
 scalers['vw_i']=1.0e1
 scalers['vw_j']=1.0e1
 scalers['kt']=1.0e2
@@ -290,7 +293,7 @@ v2=symbols('v2')
 v3=symbols('v3')
 
 if vanilla_force_model:
-    T_sum=-c1_s*sum([ omegas[i]**2 for i in range(6)])*R.T*k_vect
+    T_sum=-c1_s*sum([ omegas[i]**2 for i in range(6)])*R@k_vect
     H_sum=0*k_vect
 else:
 
@@ -312,10 +315,10 @@ else:
     def et(expr):
         return expr.subs(v3,va_body[2,0]).subs(v2,sqrt(va_body[0,0]**2+va_body[1,0]**2))
     
-    T_sum=-simplify(sum([et(T_BET).subs(omega,omegas[i]).subs(vi,etas[i]) for i in range(6)]))*R.T*k_vect
+    T_sum=-simplify(sum([et(T_BET).subs(omega,omegas[i]).subs(vi,etas[i]) for i in range(6)]))*R@k_vect
     
     H_tmp=simplify(sum([r_s*omegas[i]*ch1_s+ch2_s*(etas[i]-va_body[2,0]) for i in range(6)]))
-    H_sum=-rho*A_s*H_tmp*(va_NED-va_NED.dot(R.T@k_vect)*R.T@k_vect)
+    H_sum=-rho*A_s*H_tmp*(va_NED-va_NED.dot(R@k_vect)*R@k_vect)
     # print(H_sum)
 t3=time.time()
 "liftdrag forces"
@@ -566,6 +569,7 @@ for i in range(6):
 print("SPLIT DATA...")
 
 N_minibatches=round(prep_data["t"].max()/nsecs) if nsecs >0 else  len(prep_data)# 22 for flight 1, ?? for flight 2
+N_minibatches=N_minibatches if nsecs!='all' else 1
 
 "if you don't want to minibatch"
 # N_minibatches=len(data_prepared)
@@ -621,7 +625,7 @@ def pred_on_batch(batch,id_variables,scalers):
         A=non_id_variables['A'] if 'A' in non_id_variables else id_variables['A']
         r=non_id_variables['r'] if 'r' in non_id_variables else id_variables['r']
         
-        R=tf3d.quaternions.quat2mat(np.array([batch['q[%i]'%(j)][i] for j in range(4)])).T
+        R=tf3d.quaternions.quat2mat(np.array([batch['q[%i]'%(j)][i] for j in range(4)]))
         
         omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6=np.array([batch['omega_c[%i]'%(j)][i] for j in range(1,7,1)])
         omega_1,omega_2,omega_3,omega_4,omega_5,omega_6=omegas[i-1] if i>0 else np.array([batch['omega_c[%i]'%(j)][i] for j in range(1,7,1)])
