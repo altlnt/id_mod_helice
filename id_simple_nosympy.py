@@ -688,6 +688,91 @@ s="%f for vanilla, %f for custom model, %f for full model"%(sol_aj_od['fun'],c_j
 ax.set_title(s)
 print(s)
 
+
+
+# %% aij (di_eq_dj)
+ 
+# %% H nodrag
+
+def compute_aij_H_wdrag(ch1,ch2,di=0,dj=0,df=prep_data):
+    
+    vai=df["speed_body[0]"]
+    vaj=df["speed_body[1]"]
+    vak=df["speed_body[2]"]
+    gammai=df["gamma[0]"]
+    gammaj=df["gamma[1]"]
+
+    H=sum([compute_H(vak,df['omega_c[%i]'%(i+1)],ch1,ch2) for i in range(6)])
+    H_vect=np.c_[-vai*H,-vaj*H]
+    
+    Fa=-rho0*Area*np.c_[di*np.abs(vai)*vai,dj*np.abs(vaj)*vaj]
+
+    return H_vect+np.c_[gammai,gammaj]+Fa
+
+
+# %% H wd
+
+
+def cost_aij_h_wdrag_di_eq_dj_(X):
+    ch1,ch2,di=X
+
+    Y=compute_aij_H_wdrag(ch1,ch2,di,di)
+
+    ci=np.mean((Y[:,0]-prep_data['acc_body_grad[0]'])**2,axis=0)
+    cj=np.mean((Y[:,1]-prep_data['acc_body_grad[1]'])**2,axis=0)
+
+    c=ci+cj
+
+    print("ch1 :%f , ch2 :%f , dij :%f  , cost :%f"%(ch1,ch2,di,c))
+
+    return c
+
+X0_aij_hwd_di_eq_dj_=np.array([0,0,0])
+
+sol_aij_hwd_di_eq_dj_=minimize(cost_aij_h_wdrag_di_eq_dj_,X0_aij_hwd_di_eq_dj_,method="SLSQP")
+ch1_aij_wd_di_eq_dj_,ch2_aij_wd_di_eq_dj_,dij_aij_wd_di_eq_dj_=sol_aij_hwd_di_eq_dj_['x']
+
+
+# %% Comparison ai
+aind,ajnd=compute_aij_H_wdrag(ch1_aij_wd_di_eq_dj_,ch2_aij_wd_di_eq_dj_).T
+aid,ajd=compute_aij_H_wdrag(ch1_aij_wd_di_eq_dj_,ch2_aij_wd_di_eq_dj_,dij_aij_wd_di_eq_dj_,dij_aij_wd_di_eq_dj_).T
+
+f=plt.figure()
+f.suptitle("Aij drag vs H force fit")
+ax=f.add_subplot(1,2,1)
+ax.plot(prep_data["t"],prep_data['acc_body_grad[0]'],color="black",label="log")
+ax.plot(prep_data["t"],compute_ai_od(di_only_),color="darkred",label="pure drag",alpha=0.5)
+ax.plot(prep_data["t"],aind,color="darkblue",label="pure h force",alpha=0.5)
+ax.plot(prep_data["t"],aid,color="darkgreen",label="drag +h force",alpha=0.5)
+ax.legend(),ax.grid()
+
+print("\nPerformances: ")
+print("RMS error on acc pred is : ")
+c_i_nd=np.mean((aind-prep_data['acc_body_grad[0]'])**2,axis=0)
+c_i_d=np.mean((aid-prep_data['acc_body_grad[0]'])**2,axis=0)                            
+s="%f for vanilla, %f for custom model, %f for full model"%(sol_aij_hwd_di_eq_dj_['fun'],c_i_nd,c_i_d)
+ax.set_title(s)
+print(s)
+
+# %% Comparison aj
+
+ax=f.add_subplot(1,2,2)
+ax.plot(prep_data["t"],prep_data['acc_body_grad[1]'],color="black",label="log")
+ax.plot(prep_data["t"],compute_aj_od(dj_only_),color="darkred",label="pure drag",alpha=0.5)
+ax.plot(prep_data["t"],ajnd,color="darkblue",label="pure h force",alpha=0.5)
+ax.plot(prep_data["t"],ajd,color="darkgreen",label="drag +h force",alpha=0.5)
+ax.legend(),ax.grid()
+
+print("\nPerformances: ")
+print("RMS error on acc pred is : ")
+c_j_nd=np.mean((ajnd-prep_data['acc_body_grad[0]'])**2,axis=0)
+c_j_d=np.mean((ajd-prep_data['acc_body_grad[0]'])**2,axis=0)  
+s="%f for vanilla, %f for custom model, %f for full model"%(sol_aij_hwd_di_eq_dj_['fun'],c_j_nd,c_j_d)
+ax.set_title(s)
+print(s)
+
+
+
 # %% Synthesis
 
 
@@ -700,7 +785,7 @@ bilan=pd.DataFrame(data=None,
                           'vanilla_dk','custom_with_dk',
                           'ai_drag','ai_h','ai_drag_and_h',
                           'aj_drag','aj_h','aj_drag_and_h',
-                          'aij_h','aij_h_and_drag'])
+                          'aij_h','aij_h_and_drag','aij_h_drag_equal_coeffs'])
 
 
 
@@ -723,7 +808,8 @@ bilan.loc['aj_drag_and_h']['ch1','ch2','dj','cost']=np.r_[sol_aj_hwd['x'],sol_aj
 bilan.loc['aij_h']['ch1','ch2','cost']=np.r_[sol_aij_nodrag['x'],sol_aij_nodrag['fun']]
 bilan.loc['aij_h_and_drag']['ch1','ch2','di','dj','cost']=np.r_[sol_aij_hwd['x'],sol_aij_hwd['fun']]
 
-
+bilan.loc['aij_h_drag_equal_coeffs']['ch1','ch2','di','cost']=np.r_[sol_aij_hwd_di_eq_dj_['x'],sol_aij_hwd_di_eq_dj_['fun']]
+bilan.loc['aij_h_drag_equal_coeffs']['dj']=bilan.loc['aij_h_drag_equal_coeffs']['di']
 
 
 

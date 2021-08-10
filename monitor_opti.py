@@ -38,6 +38,30 @@ def plot_opti(opti_to_plot):
     for file in os.listdir(dirpath):
         json_list.append(file) if file!="data.json" else None
         
+        
+    "parsing meta_data json"
+    for file in json_list:
+        with open(os.path.join(dirpath,"data.json"),'r') as f:
+          data = json.load(f)        
+    opti_params={}
+    param_key_list=('log_path',
+                    'fit_on_v',
+                    'used_logged_v_in_model',
+                    'used_logged_v_in_model',
+                    'base_lr',
+                    'nsecs',
+                    'vanilla_force_model',
+                    'structural_relation_idc1',
+                    'structural_relation_idc2',
+                    'assume_nul_wind',
+                    'di_equal_dj')
+    for i in param_key_list:
+        opti_params[i]=data[i]
+        
+    textstr='\n'.join(["%s=%s"%(i,opti_params[i]) for i in opti_params])
+
+    
+    
     print(json_list)
     "constructing key list"
     for file in json_list:
@@ -64,8 +88,8 @@ def plot_opti(opti_to_plot):
     N_sp=len(keys_)
     # data_df=pd.DataFrame(data=[data_dict[i] for i in data_dict],columns=data_dict.keys())
     f=plt.figure()
-    f.suptitle(opti_to_plot)
-    score_ax=f.add_subplot(2,2,2)
+    f.suptitle("NAME=%s"%(opti_to_plot))
+    score_ax=f.add_subplot(2,3,2)
     
     y0,y1,y2=data_dict['train_sc_a'],data_dict['val_sc_a'],data_dict['total_sc_a']
 
@@ -81,9 +105,9 @@ def plot_opti(opti_to_plot):
     score_ax.plot(x,y2,label="total_sc_a")
     score_ax.scatter(xnan2,y2nans,color="red")
 
-    score_ax.grid(),score_ax.legend(),score_ax.set_ylim(0,)
+    score_ax.grid(),score_ax.legend(),score_ax.set_ylim(0,),score_ax.set_xlim(0,)
     
-    score_vx=f.add_subplot(2,2,4)
+    score_vx=f.add_subplot(2,3,5)
 
     y0,y1,y2=data_dict['train_sc_v'],data_dict['val_sc_v'],data_dict['total_sc_v']
     xnan0,y0nans=detect_nans(range(len(y0)), y0)
@@ -92,26 +116,52 @@ def plot_opti(opti_to_plot):
     
     y0,y1,y2=np.nan_to_num([y0,y1,y2],nan=0.0)
     score_vx.plot(x,y0,label="train_sc_v")
-    score_ax.scatter(xnan0,y0nans,color="red")
+    score_vx.scatter(xnan0,y0nans,color="red")
     score_vx.plot(x,y1,label="val_sc_v")
-    score_ax.scatter(xnan1,y1nans,color="red")
+    score_vx.scatter(xnan1,y1nans,color="red")
     score_vx.plot(x,y2,label="total_sc_v")
-    score_ax.scatter(xnan2,y2nans,color="red")
+    score_vx.scatter(xnan2,y2nans,color="red")
 
-    score_vx.grid(),score_vx.legend(),score_vx.set_ylim(0,)
+    score_vx.grid(),score_vx.legend(),score_vx.set_ylim(0,),score_vx.set_xlim(0,)
+    
+    ax_box=f.add_subplot(2,3,3)
+    ax_box.remove()
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    score_ax.text(0.05, 0.95, textstr, transform=ax_box.transAxes, fontsize=9,
+        verticalalignment='top',horizontalalignment="left", bbox=props)
+    
+    
     
     j=0
+    regroup=[["di","dj","dk"],["vw_i","vw_j"]]
+    print(np.array([regroup],dtype="object").flatten())
     for i,k in enumerate(data.keys()):
         if ('train_sc' in k) or  ("val_sc" in k) or ('total_sc' in k):
             pass
+        
+        elif k in [item for sublist in regroup for item in sublist]:
+            pass
+        
         else:   
             
-            temp_ax=f.add_subplot(N_sp-6,2,2*j+1)
+            temp_ax=f.add_subplot(N_sp-6-len(regroup)-1,3,3*j+1)
+            y=np.nan_to_num(data_dict[k],nan=0)
+            x=np.arange(len(y))
+            temp_ax.plot(x,y,label=k,marker="x")
+            temp_ax.legend(),temp_ax.grid(),temp_ax.set_xlim(0,)
+            j+=1
+            print(j,k)
+    
+
+    for tup in regroup:
+        temp_ax=f.add_subplot(N_sp-6-len(regroup)-1,3,3*j+1)
+
+        for k in tup:
             y=np.nan_to_num(data_dict[k],nan=-1)
             x=np.arange(len(y))
             temp_ax.plot(x,y,label=k,marker="x")
-            temp_ax.legend(),temp_ax.grid()
-            j+=1
+        temp_ax.legend(),temp_ax.grid(),temp_ax.set_xlim(0,)
+        j+=1
 
 # plot_opti(opti_to_plot)
 
@@ -120,4 +170,5 @@ def plot_opti(opti_to_plot):
 
 list_optis=os.listdir("./results/")
 # list_optis=['fit_v_True_lr_0.001000_ns_-1.000000']
-[plot_opti(i) for i in list_optis]
+# [plot_opti(i) for i in [list_optis[0]]]
+plot_opti('8epoch_fit_v_True_lr_0.01_ns_1')

@@ -3,7 +3,6 @@
 import  numpy as np
 # %%   ####### PARAMETERS
 import sys
-
 import time
 from sympy import *
 
@@ -54,7 +53,7 @@ def main_func(x):
     id_wind=not assume_nul_wind
     id_time_const=model_motor_dynamics
     
-    n_epochs=20
+    n_epochs=10
     train_proportion=0.8
     grad_autoscale=False
     
@@ -65,7 +64,7 @@ def main_func(x):
     # log_path="/logs/vol1_ext_alcore/log_real.csv"
     log_path="/logs/vol12/log_real_processed.csv"
     
-    log_name="25EPOCHS_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
+    log_name="testjit_10epoch_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
     
     
     mass=369 #batterie
@@ -598,11 +597,12 @@ def main_func(x):
     # %%   ####### MODEL function
     import transforms3d as tf3d 
     
+    
     def arg_wrapping(batch,id_variables,scalers,data_index,speed_pred_previous,omegas_pred):
         i=data_index
         
-        cost_scaler_v=max(batch['speed[0]']**2+batch['speed[1]']**2+batch['speed[2]']**2)
-        cost_scaler_a=max(batch['acc[0]']**2+batch['acc[1]']**2+batch['acc[2]']**2)
+        cost_scaler_v=1.0
+        cost_scaler_a=1.0
     
         dt=min(batch['dt'][i],1e-2)
         m=mass
@@ -661,7 +661,8 @@ def main_func(x):
         vw_i_scale,vw_j_scale,kt_scale)
         
         return X
-        
+    
+    
     def pred_on_batch(batch,id_variables,scalers):
     
         acc_pred=np.zeros((len(batch),3))
@@ -699,6 +700,7 @@ def main_func(x):
     # %%   Gradient
     import copy 
     import random
+    
     def propagate_gradient(jac_array,id_variables,
                            lr=base_lr):
         
@@ -723,7 +725,8 @@ def main_func(x):
     def dict_to_X(input_dict):
         return np.array([input_dict[key] for key in input_dict])
     
-    def fun_cost_scipy(X,batch,scalers):
+    
+    def fun_cost_scipy(X,batch,scalers,writtargs):
         
         "X is the dict_to_X of id_variables"
         "dict reconstruction "
@@ -739,6 +742,22 @@ def main_func(x):
         toplot=pd.DataFrame(data=[J,[id_var[k]*scalers[k] for k in id_variables.keys()]],columns=id_variables.keys(),index=['J','value'])
         print("\n ------ Cost (in scipy minim): %f\n"%(C))
         print(toplot.transpose())
+        
+        n,k,val_sc_a,val_sc_v,total_sc_a,total_sc_v,t0=writtargs
+        
+        realvals={}
+        for i in id_var.keys():
+            realvals[i]=id_var[i]*scalers[i]
+            
+            
+        saver(name="epoch_%i_batch_%i_t_%f"%(n,k,time.time()-t0),save_path=spath,
+        id_variables=realvals,
+        train_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
+        train_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
+        val_sc_a=val_sc_a,
+        val_sc_v=val_sc_v,
+        total_sc_a=total_sc_a,
+        total_sc_v=total_sc_v)
         
         return C,J
     
@@ -805,24 +824,41 @@ def main_func(x):
                     acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
                     id_variables=propagate_gradient(jac_error_v if fit_on_v else jac_error_a,id_variables)
                     
-                    train_sc_a+=np.mean(square_error_a,axis=0)
-                    train_sc_v+=np.mean(square_error_v,axis=0)
+                    train_sc_a+=np.sqrt(np.mean(square_error_a,axis=0))
+                    train_sc_v+=np.sqrt(np.mean(square_error_v,axis=0))
                     print(" EPOCH : %i/%i || Train batch : %i/%i || PROGRESS: %i/%i [ta,tv]=[%f,%f]"%(n,
                                                                                                       n_epochs,
                                                                                                       k,N_train_batches,
                                                                                                       k,len(temp_shuffled_batches),
-                                                                                                      np.mean(square_error_a,axis=0),
-                                                                                                      np.mean(square_error_v,axis=0)))
+                                                                                                      np.sqrt(np.mean(square_error_a,axis=0)),
+                                                                                                      np.sqrt(np.mean(square_error_v,axis=0))))
+                    
+                    realvals={}
+                    for i in id_variables.keys():
+                        realvals[i]=id_variables[i]*scalers[i]
+
+                    saver(name="epoch_%i_batch_%i"%(n,k),save_path=spath,
+                      id_variables=realvals,
+                      train_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
+                      train_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
+                      val_sc_a=val_sc_a,
+                      val_sc_v=val_sc_v,
+                      total_sc_a=total_sc_a,
+                      total_sc_v=total_sc_v)
+                    
                 elif fit_strategy=="scipy":
                     
                     X_start=dict_to_X(id_variables)
-                    bnds=[bounds[i] for i in id_variables]     
+                    bnds=[bounds[i] for i in id_variables]
+                    
+                    writtargs=[n,k,val_sc_a,val_sc_v,total_sc_a,total_sc_v,time.time()]
+                    
                     sol_scipy=minimize(fun_cost_scipy,
                                        X_start,
-                                       args=(batch_,scalers),
-                                       bounds=bnds,
-                                       jac=True,
-                                       options={"maxiter":10})
+                                       args=(batch_,scalers,writtargs),
+                                       bounds=bnds)
+                                       # jac=True,options={"maxiter":2})
+                    
                     id_variables=X_to_dict(sol_scipy["x"])
                     current_score=sol_scipy["fun"]
                     current_score_label="tv" if fit_on_v else "ta"
@@ -831,7 +867,11 @@ def main_func(x):
                                                                                                       k,N_train_batches,
                                                                                                       k,len(temp_shuffled_batches),
                                                                                                       current_score_label,
-                                                                                                      current_score))        
+                                                                                                      current_score))  
+                    
+            train_sc_a/=N_train_batches
+            train_sc_v/=N_train_batches
+            
             for k,batch_ in enumerate(temp_shuffled_batches[N_train_batches:]):
     
                 acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
@@ -842,19 +882,26 @@ def main_func(x):
                                                                                                   n_epochs,
                                                                                                   k,N_val_batches,
                                                                                                   k+N_train_batches,len(temp_shuffled_batches),
-                                                                                                  np.mean(square_error_a,axis=0),
-                                                                                                  np.mean(square_error_v,axis=0)))
+                                                                                                  np.sqrt(np.mean(square_error_a,axis=0)),
+                                                                                                  np.sqrt(np.mean(square_error_v,axis=0))))
     
-            
-            train_sc_a/=N_train_batches
-            train_sc_v/=N_train_batches
+                saver(name="epoch_%i_batch_%i"%(n,k+N_train_batches),save_path=spath,
+                  id_variables=realvals,
+                  train_sc_a=train_sc_a,
+                  train_sc_v=train_sc_v,
+                  val_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
+                  val_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
+                  total_sc_a=total_sc_a,
+                  total_sc_v=total_sc_v)
+
+
             
             val_sc_a/=N_val_batches
             val_sc_v/=N_val_batches
     
             acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(data_prepared,id_variables,scalers)
             total_sc_a=np.sqrt(np.mean(square_error_a,axis=0))
-            total_sc_v=np.sqrt(np.mean(square_error_v ,axis=0) )
+            total_sc_v=np.sqrt(np.mean(square_error_v ,axis=0))
             
             realvals={}
             for i in id_variables.keys():
@@ -891,12 +938,18 @@ if __name__ == '__main__':
     # ns_range=['all',25,5,-1]
     # fit_arg_range=[True,False]
     
-    blr_range=['scipy',1e-2]
-    ns_range=['all',-1,5,25]
+    blr_range=[1e-2]
+    ns_range=[5]
     fit_arg_range=[True,False]
     
+    rem=[[True, 1e-2, 25],
+         [False, 1e-2, 25]]
+    
+    
     x_r=[[i,j,k] for j in blr_range for i in  fit_arg_range  for k in ns_range ]
+    x_r=[i for i in x_r if i not in rem]
+    print(x_r)
 
-    pool = Pool(processes=16)
+    pool = Pool(processes=2)
     pool.map(main_func, x_r)
 
