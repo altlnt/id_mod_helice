@@ -23,6 +23,11 @@ def main_func(x):
     nsecs=ns
     model_motor_dynamics=True
 
+    n_epochs=30
+    
+    log_name="stochast_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
+
+
     with_ct3=False
     vanilla_force_model=False
     
@@ -53,7 +58,6 @@ def main_func(x):
     id_wind=not assume_nul_wind
     id_time_const=model_motor_dynamics
     
-    n_epochs=10
     train_proportion=0.8
     grad_autoscale=False
     
@@ -64,7 +68,6 @@ def main_func(x):
     # log_path="/logs/vol1_ext_alcore/log_real.csv"
     log_path="/logs/vol12/log_real_processed.csv"
     
-    log_name="testjit_10epoch_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
     
     
     mass=369 #batterie
@@ -571,22 +574,23 @@ def main_func(x):
     
     
     for i in range(6):
-        prep_data['omega_c[%i]'%(i+1)]=(prep_data['PWM_motor[%i]'%(i+1)]-pwmmin)/(pwmmax-pwmmin)*U_batt*kv_motor*2*np.pi/60
+        data_prepared['omega_c[%i]'%(i+1)]=(data_prepared['PWM_motor[%i]'%(i+1)]-pwmmin)/(pwmmax-pwmmin)*U_batt*kv_motor*2*np.pi/60
         
     "splitting the dataset into nsecs sec minibatches"
     print("SPLIT DATA...")
     
     if nsecs=='all':
-        data_batches=[prep_data]
+        data_batches=[data_prepared]
         N_train_batches=1
         N_val_batches=0
+        
     else:
-        N_minibatches=round(prep_data["t"].max()/nsecs) if nsecs >0 else  len(prep_data)# 22 for flight 1, ?? for flight 2
+        N_minibatches=round(data_prepared["t"].max()/nsecs) if nsecs >0 else  len(data_prepared)# 22 for flight 1, ?? for flight 2
         N_minibatches=N_minibatches if nsecs!='all' else 1
         
         "if you don't want to minibatch"
         # N_minibatches=len(data_prepared)
-        data_batches=[i.drop(columns=[j for j in prep_data.keys() if (("level" in j ) or ("index") in j) ]) for i in np.array_split(prep_data, N_minibatches)]
+        data_batches=[i.drop(columns=[j for j in data_prepared.keys() if (("level" in j ) or ("index") in j) ]) for i in np.array_split(data_prepared, N_minibatches)]
         # print(data_batches)
         data_batches=[i.reset_index() for i in data_batches]
         
@@ -705,8 +709,12 @@ def main_func(x):
                            lr=base_lr):
         
         used_jac=np.mean(jac_array,axis=0)
-        print("Propagate %s grad : ")
-        toplot=pd.DataFrame(data=[used_jac,[id_variables[i]*scalers[i] for i in id_variables.keys()]],columns=id_variables.keys(),index=['J','value'])
+        print("%s --- Propagate %s grad : "%(log_name))
+        
+        datatoplot=np.c_[used_jac,[id_variables[k]*scalers[k] for k in id_variables.keys()]].T
+        toplot=pd.DataFrame(data=datatoplot,columns=id_variables.keys(),index=['J','value'])
+        
+    
         print(toplot.transpose())
         
         new_dic=copy.deepcopy(id_variables)
@@ -730,26 +738,30 @@ def main_func(x):
         
         "X is the dict_to_X of id_variables"
         "dict reconstruction "
-        
+
         id_var=X_to_dict(X)
-        
+
+
         acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch,id_var,scalers)
         
         used_jac=jac_error_v if fit_on_v else jac_error_a
         used_err=square_error_v if fit_on_v else square_error_a
-        J,C=np.mean(used_jac,axis=0),np.mean(used_err,axis=0)
+        J=np.mean(used_jac,axis=0)
+        C=np.mean(used_err,axis=0)
         
-        toplot=pd.DataFrame(data=[J,[id_var[k]*scalers[k] for k in id_variables.keys()]],columns=id_variables.keys(),index=['J','value'])
-        print("\n ------ Cost (in scipy minim): %f\n"%(C))
+        print(len(id_var),J.shape)
+        datatoplot=np.c_[J,[id_var[k]*scalers[k] for k in id_var.keys()]].T
+        toplot=pd.DataFrame(data=datatoplot,columns=id_var.keys(),index=['J','value'])
+        print("\n %s------ Cost (in scipy minim): %f\n"%(log_name,C))
         print(toplot.transpose())
         
         n,k,val_sc_a,val_sc_v,total_sc_a,total_sc_v,t0=writtargs
-        
+
         realvals={}
         for i in id_var.keys():
             realvals[i]=id_var[i]*scalers[i]
             
-            
+
         saver(name="epoch_%i_batch_%i_t_%f"%(n,k,time.time()-t0),save_path=spath,
         id_variables=realvals,
         train_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
@@ -826,7 +838,7 @@ def main_func(x):
                     
                     train_sc_a+=np.sqrt(np.mean(square_error_a,axis=0))
                     train_sc_v+=np.sqrt(np.mean(square_error_v,axis=0))
-                    print(" EPOCH : %i/%i || Train batch : %i/%i || PROGRESS: %i/%i [ta,tv]=[%f,%f]"%(n,
+                    print(" %s --- EPOCH : %i/%i || Train batch : %i/%i || PROGRESS: %i/%i [ta,tv]=[%f,%f]"%(log_name,n,
                                                                                                       n_epochs,
                                                                                                       k,N_train_batches,
                                                                                                       k,len(temp_shuffled_batches),
@@ -856,13 +868,13 @@ def main_func(x):
                     sol_scipy=minimize(fun_cost_scipy,
                                        X_start,
                                        args=(batch_,scalers,writtargs),
-                                       bounds=bnds)
-                                       # jac=True,options={"maxiter":2})
+                                       bounds=bnds,
+                                        jac=True)#,options={"maxiter":1})
                     
                     id_variables=X_to_dict(sol_scipy["x"])
                     current_score=sol_scipy["fun"]
                     current_score_label="tv" if fit_on_v else "ta"
-                    print(" EPOCH : %i/%i || Train batch : %i/%i || PROGRESS: %i/%i [%s]=[%f]"%(n,
+                    print(" %s --- EPOCH : %i/%i || Train batch : %i/%i || PROGRESS: %i/%i [%s]=[%f]"%(log_name,n,
                                                                                                       n_epochs,
                                                                                                       k,N_train_batches,
                                                                                                       k,len(temp_shuffled_batches),
@@ -871,28 +883,28 @@ def main_func(x):
                     
             train_sc_a/=N_train_batches
             train_sc_v/=N_train_batches
-            
-            for k,batch_ in enumerate(temp_shuffled_batches[N_train_batches:]):
-    
-                acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
-                
-                val_sc_a+=np.mean(square_error_a,axis=0)
-                val_sc_v+=np.mean(square_error_v ,axis=0)   
-                print(" EPOCH : %i/%i || Eval batch : %i/%i || PROGRESS: %i/%i [va,vv]=[%f,%f]"%(n,
-                                                                                                  n_epochs,
-                                                                                                  k,N_val_batches,
-                                                                                                  k+N_train_batches,len(temp_shuffled_batches),
-                                                                                                  np.sqrt(np.mean(square_error_a,axis=0)),
-                                                                                                  np.sqrt(np.mean(square_error_v,axis=0))))
-    
-                saver(name="epoch_%i_batch_%i"%(n,k+N_train_batches),save_path=spath,
-                  id_variables=realvals,
-                  train_sc_a=train_sc_a,
-                  train_sc_v=train_sc_v,
-                  val_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
-                  val_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
-                  total_sc_a=total_sc_a,
-                  total_sc_v=total_sc_v)
+            if ns!="all":
+                for k,batch_ in enumerate(temp_shuffled_batches[N_train_batches:]):
+        
+                    acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
+                    
+                    val_sc_a+=np.mean(square_error_a,axis=0)
+                    val_sc_v+=np.mean(square_error_v ,axis=0)   
+                    print(" %s --- EPOCH : %i/%i || Eval batch : %i/%i || PROGRESS: %i/%i [va,vv]=[%f,%f]"%(log_name,
+                                                                                                      n,n_epochs,
+                                                                                                      k,N_val_batches,
+                                                                                                      k+N_train_batches,len(temp_shuffled_batches),
+                                                                                                      np.sqrt(np.mean(square_error_a,axis=0)),
+                                                                                                      np.sqrt(np.mean(square_error_v,axis=0))))
+        
+                    saver(name="epoch_%i_batch_%i"%(n,k+N_train_batches),save_path=spath,
+                      id_variables=realvals,
+                      train_sc_a=train_sc_a,
+                      train_sc_v=train_sc_v,
+                      val_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
+                      val_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
+                      total_sc_a=total_sc_a,
+                      total_sc_v=total_sc_v)
 
 
             
@@ -938,18 +950,20 @@ if __name__ == '__main__':
     # ns_range=['all',25,5,-1]
     # fit_arg_range=[True,False]
     
-    blr_range=[1e-2]
-    ns_range=[5]
+    blr_range=[1e-3,1e-4,1e-5]
+    ns_range=[-1]
     fit_arg_range=[True,False]
     
-    rem=[[True, 1e-2, 25],
-         [False, 1e-2, 25]]
+    rem=[[True, 5e-3, 25],
+         [False, 5e-3, 25]]
     
     
     x_r=[[i,j,k] for j in blr_range for i in  fit_arg_range  for k in ns_range ]
     x_r=[i for i in x_r if i not in rem]
+    
+    
     print(x_r)
 
-    pool = Pool(processes=2)
+    pool = Pool(processes=4)
     pool.map(main_func, x_r)
 

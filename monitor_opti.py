@@ -91,38 +91,46 @@ def plot_opti(opti_to_plot):
     f.suptitle("NAME=%s"%(opti_to_plot))
     score_ax=f.add_subplot(2,3,2)
     
-    y0,y1,y2=data_dict['train_sc_a'],data_dict['val_sc_a'],data_dict['total_sc_a']
+    y0,y1,y2=([i for i in data_dict['train_sc_a'] if i>0],
+              [i for i in data_dict['val_sc_a'] if i>0],
+              [i for i in data_dict['total_sc_a'] if i>0])
 
     xnan0,y0nans=detect_nans(range(len(y0)), y0)
     xnan1,y1nans=detect_nans(range(len(y1)), y1)
     xnan2,y2nans=detect_nans(range(len(y2)), y2)
-    x=range(len(y0))
-    y0,y1,y2=np.nan_to_num([y0,y1,y2],nan=0.0)
-    score_ax.plot(x,y0,label="train_sc_a")
+    x0,x1,x2=range(len(y0)),range(len(y1)),range(len(y2))
+    y0,y1,y2=np.nan_to_num(y0,nan=0.0),np.nan_to_num(y1,nan=0.0),np.nan_to_num(y2,nan=0.0)
+    
+    score_ax.plot(x0,y0,label="train_sc_a")
     score_ax.scatter(xnan0,y0nans,color="red")
-    score_ax.plot(x,y1,label="val_sc_a")
+    score_ax.plot(x1,y1,label="val_sc_a")
     score_ax.scatter(xnan1,y1nans,color="red")
-    score_ax.plot(x,y2,label="total_sc_a")
+    score_ax.plot(x2,y2,label="total_sc_a",marker="o")
     score_ax.scatter(xnan2,y2nans,color="red")
 
-    score_ax.grid(),score_ax.legend(),score_ax.set_ylim(0,),score_ax.set_xlim(0,)
+    score_ax.grid(),score_ax.legend(),score_ax.set_ylim(0,2),score_ax.set_xlim(0,)
     
     score_vx=f.add_subplot(2,3,5)
 
-    y0,y1,y2=data_dict['train_sc_v'],data_dict['val_sc_v'],data_dict['total_sc_v']
+    y0,y1,y2=([i for i in data_dict['train_sc_v'] if i>0],
+              [i for i in data_dict['val_sc_v'] if i>0],
+              [i for i in data_dict['total_sc_v'] if i>0])
+
     xnan0,y0nans=detect_nans(range(len(y0)), y0)
     xnan1,y1nans=detect_nans(range(len(y1)), y1)
     xnan2,y2nans=detect_nans(range(len(y2)), y2)
     
-    y0,y1,y2=np.nan_to_num([y0,y1,y2],nan=0.0)
-    score_vx.plot(x,y0,label="train_sc_v")
+    y0,y1,y2=np.nan_to_num(y0,nan=0.0),np.nan_to_num(y1,nan=0.0),np.nan_to_num(y2,nan=0.0)
+    x0,x1,x2=range(len(y0)),range(len(y1)),range(len(y2))
+
+    score_vx.plot(x0,y0,label="train_sc_v")
     score_vx.scatter(xnan0,y0nans,color="red")
-    score_vx.plot(x,y1,label="val_sc_v")
+    score_vx.plot(x1,y1,label="val_sc_v")
     score_vx.scatter(xnan1,y1nans,color="red")
-    score_vx.plot(x,y2,label="total_sc_v")
+    score_vx.plot(x2,y2,label="total_sc_v",marker="o")
     score_vx.scatter(xnan2,y2nans,color="red")
 
-    score_vx.grid(),score_vx.legend(),score_vx.set_ylim(0,),score_vx.set_xlim(0,)
+    score_vx.grid(),score_vx.legend(),score_vx.set_ylim(0,2),score_vx.set_xlim(0,)
     
     ax_box=f.add_subplot(2,3,3)
     ax_box.remove()
@@ -134,7 +142,7 @@ def plot_opti(opti_to_plot):
     
     j=0
     regroup=[["di","dj","dk"],["vw_i","vw_j"]]
-    print(np.array([regroup],dtype="object").flatten())
+    # print(np.array([regroup],dtype="object").flatten())
     for i,k in enumerate(data.keys()):
         if ('train_sc' in k) or  ("val_sc" in k) or ('total_sc' in k):
             pass
@@ -147,7 +155,7 @@ def plot_opti(opti_to_plot):
             temp_ax=f.add_subplot(N_sp-6-len(regroup)-1,3,3*j+1)
             y=np.nan_to_num(data_dict[k],nan=0)
             x=np.arange(len(y))
-            temp_ax.plot(x,y,label=k,marker="x")
+            temp_ax.plot(x,y,label=k)
             temp_ax.legend(),temp_ax.grid(),temp_ax.set_xlim(0,)
             j+=1
             print(j,k)
@@ -159,7 +167,7 @@ def plot_opti(opti_to_plot):
         for k in tup:
             y=np.nan_to_num(data_dict[k],nan=-1)
             x=np.arange(len(y))
-            temp_ax.plot(x,y,label=k,marker="x")
+            temp_ax.plot(x,y,label=k)
         temp_ax.legend(),temp_ax.grid(),temp_ax.set_xlim(0,)
         j+=1
 
@@ -170,5 +178,5 @@ def plot_opti(opti_to_plot):
 
 list_optis=os.listdir("./results/")
 # list_optis=['fit_v_True_lr_0.001000_ns_-1.000000']
-# [plot_opti(i) for i in [list_optis[0]]]
-plot_opti('8epoch_fit_v_True_lr_0.01_ns_1')
+[plot_opti(i) for i in list_optis]
+# plot_opti('10ep_fit_v_False_lr_scipy_ns_2')
