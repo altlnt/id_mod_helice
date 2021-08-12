@@ -6,9 +6,9 @@ import sys
 
 # generic booleans
 model_motor_dynamics=True
-used_logged_v_in_model=True
+used_logged_v_in_model=False
 with_ct3=False
-vanilla_force_model=True
+vanilla_force_model=False
 
 structural_relation_idc1=False
 structural_relation_idc2=False
@@ -23,7 +23,7 @@ if structural_relation_idc1 and structural_relation_idc2:
     print("structural_relation_idc1 and structural_relation_idc2 cannot be true at the same time")
     sys.exit()
 
-fit_on_v=True
+fit_on_v=False
 assume_nul_wind=False
 approx_x_plus_y=False
 di_equal_dj=False
@@ -132,6 +132,7 @@ scalers['kt']=1.0
 
 
 
+
 metap={"model_motor_dynamics":model_motor_dynamics,
         "used_logged_v_in_model":used_logged_v_in_model,
         "with_ct3":with_ct3,
@@ -192,16 +193,15 @@ def saver(name=None,save_path="/home/alex/Documents/identification_modele_hélic
 
 
 # %%   ####### SYMPY PROBLEM 
-
-import time
 from sympy import *
+import time
 
 t0=time.time()
 
 
 print("\nElapsed : %f s , Prev step time: -1 s \\ Generating first symbols ..."%(time.time()-t0))
-dt=symbols('dt',positive=True,real=True)
 
+dt=symbols('dt',positive=True,real=True)
 m=symbols('m',reals=True,positive=True)
 
 m_scale=symbols('m_scale',real=True,positive=True)
@@ -220,27 +220,18 @@ R=Matrix([[r1,r2,r3],
           [r7,r8,r9]])
 
 
-alog_i,alog_j,alog_k=symbols("alog_i,alog_j,alog_k",real=True)
-
-alog=Matrix([[alog_i],[alog_j],[alog_k]])
-
-vnext_i,vnext_j,vnext_k=symbols("vnext_i,vnext_j,vnext_k",real=True)
-
-vnext_log=Matrix([[vnext_i],[vnext_j],[vnext_k]])
-
 vlog_i,vlog_j,vlog_k=symbols("vlog_i,vlog_j,vlog_k",real=True)
 vpred_i,vpred_j,vpred_k=symbols("vpred_i,vpred_j,vpred_k",real=True)
 
-
 v_i,v_j,v_k=(vlog_i,vlog_j,vlog_k) if used_logged_v_in_model else (vpred_i,vpred_j,vpred_k)
 
-v=Matrix([[v_i],
-          [v_j],
-          [v_k]])
 
 vw_i,vw_j=symbols('vw_i,vw_j',real=True)
 vw_i_s,vw_j_s=vw_i*vw_i_scale,vw_j*vw_j_scale
 
+v=Matrix([[v_i],
+         [v_j],
+         [v_k]])
 
 if not assume_nul_wind:
     va_NED=Matrix([[v_i-vw_i_s],
@@ -252,8 +243,6 @@ else :
                    [v_k]])
 
 va_body=R.T@va_NED
-
-
 
 k_vect=Matrix([[0],
             [0],
@@ -287,28 +276,23 @@ c1,c2,c3=symbols('c1,c2,c3',real=True)
 c1_s,c2_s,c3_s=c1*c1_scale,c2*c2_scale,c3*c3_scale
 
 ch1,ch2=symbols('ch1,ch2',real=True)
-ch1_s,ch2_s=c1*ch1_scale,c2*ch2_scale
+ch1_s,ch2_s=ch1*ch1_scale,ch2*ch2_scale
 
 vi=symbols('eta',reals=True)
 
-v3=Matrix([va_body[2,0]])
-v2=sqrt(Matrix([va_body[0,0]**2+va_body[1,0]**2]))
-
+v2=symbols('v2')
 v3=symbols('v3')
-v2=symbols("v2")
 
 if vanilla_force_model:
     T_sum=-c1_s*sum([ omegas[i]**2 for i in range(6)])*R@k_vect
     H_sum=0*k_vect
 else:
 
-    
-
-    
-    
     T_BET=rho*A_s*r_s*omega*(c1_s*r_s*omega-c2_s*(vi-v3)) if not with_ct3 else rho*A_s*r_s*omega*(c1_s*omega*r_s-c2_s*(vi-v3)+c3_s*v2**2)
+    
     if structural_relation_idc1:
         T_BET=T_BET.subs(c2, b1*c1-2/b1)
+    
     if structural_relation_idc2:
         T_BET=T_BET.subs(c1, c2/b1+2/b1*b1)
         
@@ -325,8 +309,8 @@ else:
     T_sum=-simplify(sum([et(T_BET).subs(omega,omegas[i]).subs(vi,etas[i]) for i in range(6)]))*R@k_vect
     
     H_tmp=simplify(sum([r_s*omegas[i]*ch1_s+ch2_s*(etas[i]-va_body[2,0]) for i in range(6)]))
-    H_sum=-rho*A_s*H_tmp*(va_NED-va_NED.dot(k_vect)*k_vect)
-
+    H_sum=-rho*A_s*H_tmp*(va_NED-va_NED.dot(R@k_vect)*R@k_vect)
+    # print(H_sum)
 t3=time.time()
 "liftdrag forces"
 print("Elapsed : %f s , Prev step time: %f s \\ Solving lifrdrag model ..."%(t3-t0,t3-t2))
@@ -346,6 +330,13 @@ new_v=v+dt*new_acc
 
 t37=time.time()
 print("Elapsed : %f s , Prev step time: %f s \\ Generating costs ..."%(t37-t0,t37-t35))
+
+alog_i,alog_j,alog_k=symbols("alog_i,alog_j,alog_k",real=True)
+alog=Matrix([[alog_i],[alog_j],[alog_k]])
+
+vnext_i,vnext_j,vnext_k=symbols("vnext_i,vnext_j,vnext_k",real=True)
+vnext_log=Matrix([[vnext_i],[vnext_j],[vnext_k]])
+
 
 err_a=Matrix(alog-new_acc)
 err_v=Matrix(vnext_log-new_v)
@@ -422,14 +413,6 @@ ch1_scale,ch2_scale,di_scale,dj_scale,dk_scale,
 vw_i_scale,vw_j_scale,kt_scale)
 
 
-# acc_pred_func=lambdify(X,new_acc, modules='numpy')
-# print(" ..... Acc ok, 1/3")
-
-# speed_pred_func=lambdify(X,new_v, modules='numpy')
-# print(" ..... Speed ok, 2/3")
-
-# omega_pred=lambdify(X,omegas, modules='numpy')
-# print(" ..... Omega ok, 3/3")
 
 Y=Matrix([new_acc,new_v,omegas,sqerr_a,sqerr_v,Ja.T,Jv.T])
 model_func=lambdify(X,Y, modules='numpy')
@@ -452,7 +435,6 @@ di,dj,dk,
 rho,A,r,r1,r2,r3,r4,r5,r6,r7,r8,r9,R,
 omega_1,omega_2,omega_3,omega_4,omega_5,omega_6,
 omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6)
-
 
 "test "
 
@@ -522,6 +504,19 @@ for j in rem:
     del(non_id_variables[j])
 
 
+
+" TEST PARAMS "
+id_variables['c1']=0.019288853672207975
+id_variables['c2']= 0.10307909353192153
+id_variables['ch1']=0.07397969153022055
+id_variables['ch2']=0.09804942081339284
+id_variables['di']=0.8790836789987625
+id_variables['dj']=0.7379022916137631
+id_variables['dk']=0.3993246881903898
+id_variables['vw_i']=-0.5876678648256335
+id_variables['vw_j']=-0.24259553720158558
+id_variables['kt']=5.0
+
 print("\n ID VARIABLES:")
 print(id_variables,"\n")
 
@@ -575,6 +570,73 @@ for i in range(6):
 # %%   ####### MODEL function
 import transforms3d as tf3d 
 
+    
+    
+def arg_wrapping(batch,id_variables,scalers,data_index,speed_pred_previous,omegas_pred):
+    i=data_index
+    
+    cost_scaler_v=1.0
+    cost_scaler_a=1.0
+
+    dt=min(batch['dt'][i],1e-2)
+    m=mass
+    vlog_i,vlog_j,vlog_k=batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i]
+    vpred_i,vpred_j,vpred_k=speed_pred_previous 
+    alog_i,alog_j,alog_k=batch['acc_ned_grad[0]'][i],batch['acc_ned_grad[1]'][i],batch['acc_ned_grad[2]'][i]
+    vnext_i,vnext_j,vnext_k=batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i]
+    
+    m=non_id_variables['m'] if 'm' in non_id_variables else id_variables['m']
+    vw_i=non_id_variables['vw_i'] if 'vw_i' in non_id_variables else id_variables['vw_i']
+    vw_j=non_id_variables['vw_j'] if 'vw_j' in non_id_variables else id_variables['vw_j']
+    kt=non_id_variables['kt'] if 'kt' in non_id_variables else id_variables['kt']
+    b1=non_id_variables['b1'] if 'b1' in non_id_variables else id_variables['b1']
+    c1=non_id_variables['c1'] if 'c1' in non_id_variables else id_variables['c1']
+    c2=non_id_variables['c2'] if 'c2' in non_id_variables else id_variables['c2']
+    c3=non_id_variables['c3'] if 'c3' in non_id_variables else id_variables['c3']
+    ch1=non_id_variables['ch1'] if 'ch1' in non_id_variables else id_variables['ch1']
+    ch2=non_id_variables['ch2'] if 'ch2' in non_id_variables else id_variables['ch2']
+    di=non_id_variables['di'] if 'di' in non_id_variables else id_variables['di']
+    dj=non_id_variables['dj'] if 'dj' in non_id_variables else id_variables['dj']
+    dk=non_id_variables['dk'] if 'dk' in non_id_variables else id_variables['dk']
+    rho=non_id_variables['rho'] if 'rho' in non_id_variables else id_variables['rho']
+    A=non_id_variables['A'] if 'A' in non_id_variables else id_variables['A']
+    r=non_id_variables['r'] if 'r' in non_id_variables else id_variables['r']
+    
+    R=tf3d.quaternions.quat2mat(np.array([batch['q[%i]'%(j)][i] for j in range(4)]))
+    
+    omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6=np.array([batch['omega_c[%i]'%(j)][i] for j in range(1,7,1)])
+    omega_1,omega_2,omega_3,omega_4,omega_5,omega_6=omegas_pred
+            
+    m_scale=scalers['m']
+    A_scale=scalers['A']
+    r_scale=scalers['r']
+    c1_scale,c2_scale,c3_scale=scalers['c1'],scalers['c2'],scalers['c3']
+    ch1_scale,ch2_scale=scalers['ch1'],scalers['ch2']
+    di_scale,dj_scale,dk_scale=scalers['di'],scalers['dj'],scalers['dk']
+    vw_i_scale,vw_j_scale=scalers['vw_i'],scalers['vw_j']
+    kt_scale=scalers['kt']
+    
+    X=(m,A,r,rho,
+    b1,
+    c1,c2,c3,
+    ch1,ch2,
+    di,dj,dk,
+    vw_i,vw_j,
+    kt,
+    dt,cost_scaler_a,cost_scaler_v,
+    vlog_i,vlog_j,vlog_k,
+    vpred_i,vpred_j,vpred_k,
+    alog_i,alog_j,alog_k,
+    vnext_i,vnext_j,vnext_k,*R.flatten(),
+    omega_1,omega_2,omega_3,omega_4,omega_5,omega_6,
+    omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6,
+    m_scale,A_scale,r_scale,c1_scale,c2_scale,c3_scale,
+    ch1_scale,ch2_scale,di_scale,dj_scale,dk_scale,
+    vw_i_scale,vw_j_scale,kt_scale)
+    
+    return X
+    
+    
 def pred_on_batch(batch,id_variables,scalers):
 
     acc_pred=np.zeros((len(batch),3))
@@ -586,73 +648,15 @@ def pred_on_batch(batch,id_variables,scalers):
     jac_error_a=np.zeros((len(batch),len(id_variables)))
     jac_error_v=np.zeros((len(batch),len(id_variables)))
     
-    t0=time.time()
-    
-    cost_scaler_v=max(batch['speed[0]']**2+batch['speed[1]']**2+batch['speed[2]']**2)
-    cost_scaler_a=max(batch['acc[0]']**2+batch['acc[1]']**2+batch['acc[2]']**2)
     for i in batch.index:
-        print("\r %i / %i "%(i,max(batch.index)), end='', flush=True)
-        dt=min(batch['dt'][i],1e-2)
-        m=mass
-        vlog_i,vlog_j,vlog_k=batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i]
-        vpred_i,vpred_j,vpred_k=speed_pred[i]
-        alog_i,alog_j,alog_k=batch['acc_ned_grad[0]'][i],batch['acc_ned_grad[1]'][i],batch['acc_ned_grad[2]'][i]
-        vnext_i,vnext_j,vnext_k=batch['speed_pred[0]'][i],batch['speed_pred[1]'][i],batch['speed_pred[2]'][i]
-        
-        m=non_id_variables['m'] if 'm' in non_id_variables else id_variables['m']
-        vw_i=non_id_variables['vw_i'] if 'vw_i' in non_id_variables else id_variables['vw_i']
-        vw_j=non_id_variables['vw_j'] if 'vw_j' in non_id_variables else id_variables['vw_j']
-        kt=non_id_variables['kt'] if 'kt' in non_id_variables else id_variables['kt']
-        b1=non_id_variables['b1'] if 'b1' in non_id_variables else id_variables['b1']
-        c1=non_id_variables['c1'] if 'c1' in non_id_variables else id_variables['c1']
-        c2=non_id_variables['c2'] if 'c2' in non_id_variables else id_variables['c2']
-        c3=non_id_variables['c3'] if 'c3' in non_id_variables else id_variables['c3']
-        ch1=non_id_variables['ch1'] if 'ch1' in non_id_variables else id_variables['ch1']
-        ch2=non_id_variables['ch2'] if 'ch2' in non_id_variables else id_variables['ch2']
-        di=non_id_variables['di'] if 'di' in non_id_variables else id_variables['di']
-        dj=non_id_variables['dj'] if 'dj' in non_id_variables else id_variables['dj']
-        dk=non_id_variables['dk'] if 'dk' in non_id_variables else id_variables['dk']
-        rho=non_id_variables['rho'] if 'rho' in non_id_variables else id_variables['rho']
-        A=non_id_variables['A'] if 'A' in non_id_variables else id_variables['A']
-        r=non_id_variables['r'] if 'r' in non_id_variables else id_variables['r']
-        
-        R=tf3d.quaternions.quat2mat(np.array([batch['q[%i]'%(j)][i] for j in range(4)])).T
-        
-        omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6=np.array([batch['omega_c[%i]'%(j)][i] for j in range(1,7,1)])
-        omega_1,omega_2,omega_3,omega_4,omega_5,omega_6=omegas[i-1] if i>0 else np.array([batch['omega_c[%i]'%(j)][i] for j in range(1,7,1)])
-        
-        
-        m_scale=scalers['m']
-        A_scale=scalers['A']
-        r_scale=scalers['r']
-        c1_scale,c2_scale,c3_scale=scalers['c1'],scalers['c2'],scalers['c3']
-        ch1_scale,ch2_scale=scalers['ch1'],scalers['ch2']
-        di_scale,dj_scale,dk_scale=scalers['di'],scalers['dj'],scalers['dk']
-        vw_i_scale,vw_j_scale=scalers['vw_i'],scalers['vw_j']
-        kt_scale=scalers['kt']
-        
-        X=(m,A,r,rho,
-        b1,
-        c1,c2,c3,
-        ch1,ch2,
-        di,dj,dk,
-        vw_i,vw_j,
-        kt,
-        dt,cost_scaler_a,cost_scaler_v,
-        vlog_i,vlog_j,vlog_k,
-        vpred_i,vpred_j,vpred_k,
-        alog_i,alog_j,alog_k,
-        vnext_i,vnext_j,vnext_k,*R.flatten(),
-        omega_1,omega_2,omega_3,omega_4,omega_5,omega_6,
-        omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6,
-        m_scale,A_scale,r_scale,c1_scale,c2_scale,c3_scale,
-        ch1_scale,ch2_scale,di_scale,dj_scale,dk_scale,
-        vw_i_scale,vw_j_scale,kt_scale)
-    
-        # print(*X)
-        # input("OUI?")
+        print("\r Pred on batch %i / %i "%(i,max(batch.index)), end='', flush=True)
+
+        speed_pred_prev=speed_pred[i-1] if i>min(batch.index) else (batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i])
+        omegas_pred=omegas[i-1] if i>0 else np.array([batch['omega_c[%i]'%(j)][i] for j in range(1,7,1)])
+        X=arg_wrapping(batch,id_variables,scalers,i,speed_pred_prev,omegas_pred)
+
         Y=model_func(*X)
-        # print(Y)
+
         acc_pred[i]=Y[:3].reshape(3,)
         speed_pred[i]=Y[3:6].reshape(3,)
         omegas[i]=Y[6:12].reshape(6,)
@@ -660,9 +664,11 @@ def pred_on_batch(batch,id_variables,scalers):
         square_error_v[i]=Y[13:14].reshape(1,)
         jac_error_a[i]=Y[14:14+len(id_variables)].reshape(len(id_variables),)
         jac_error_v[i]=Y[14+len(id_variables):14+2*len(id_variables)].reshape(len(id_variables),)
+        
+
     # print("TOTAL TIME:",time.time()-t0)
     return acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v
-
+    
 
 
 
@@ -730,23 +736,47 @@ def test_params(batch,id_variables):
 
     return acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v
     
-id_variables['c1']=6.0e-6
-# id_variables['c2']=0.106840
 
-id_variables['di']=0.0
-id_variables['dj']=0.0
-id_variables['dk']=0.0
 
-acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=test_params(data_prepared,id_variables)
+
+tdf=data_prepared[:int(len(data_prepared)/25)]
+tdf=data_prepared
+acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=test_params(tdf,id_variables)
 # acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(data_prepared,id_variables,scalers)
+# speed_pred=np.cumsum(acc_pred,axis=0)*np.clip(np.array([tdf.dt,tdf.dt,tdf.dt]).reshape(acc_pred.shape),1e-12,1e-2)
 
-# plt.figure()
-# plt.plot(data_prepared['acc[0]'])
-# plt.plot(data_prepared['acc_ned_grad[0]'])
-# plt.figure()
-# plt.plot(data_prepared['acc[1]'])
-# plt.plot(data_prepared['acc_ned_grad[1]'])
-# plt.figure()
-# plt.plot(data_prepared['acc[2]'])
-# plt.plot(data_prepared['acc_ned_grad[2]'])
+plt.figure()
 
+plt.gcf().add_subplot(3,2,1)
+plt.plot(data_prepared['acc_ned_grad[0]'],color="black",label="log",alpha=0.5)
+plt.plot(acc_pred[:,0],color="red",label="pred",alpha=0.5)
+plt.grid(),plt.legend()
+
+plt.gcf().add_subplot(3,2,3)
+plt.plot(acc_pred[:,1],color="red",label="pred",alpha=0.5)
+plt.plot(data_prepared['acc_ned_grad[1]'],color="black",label="log",alpha=0.5)
+plt.grid(),plt.legend()
+
+plt.gcf().add_subplot(3,2,5)
+plt.plot(acc_pred[:,2],color="red",label="pred",alpha=0.5)
+plt.plot(data_prepared['acc_ned_grad[2]'],color="black",label="log",alpha=0.5)
+plt.grid(),plt.legend()
+
+plt.gcf().add_subplot(3,2,2)
+plt.plot(speed_pred[:,0],color="red",label="pred",alpha=0.5)
+plt.plot(data_prepared['speed[0]'],color="black",label="log",alpha=0.5)
+plt.grid(),plt.legend()
+
+plt.gcf().add_subplot(3,2,4)
+plt.plot(speed_pred[:,1],color="red",label="pred",alpha=0.5)
+plt.plot(data_prepared['speed[1]'],color="black",label="log",alpha=0.5)
+plt.grid(),plt.legend()
+
+plt.gcf().add_subplot(3,2,6)
+plt.plot(speed_pred[:,2],color="red",label="pred",alpha=0.5)
+plt.plot(data_prepared['speed[2]'],color="black",label="log",alpha=0.5)
+plt.grid(),plt.legend()
+
+    
+    
+    

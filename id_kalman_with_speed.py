@@ -725,93 +725,99 @@ def save_df(data,id_var,
 
 tdf=data_prepared[:int(len(data_prepared)/20)]
 
-# a=100
-# Q=a*np.eye(len(id_variables)+3)
-# Q[3:-2,3:-2]=Q[0,0]/10*np.eye(Q[3:-2,3:-2].shape[0]) 
-# # Q[:3,:3]=0.002*np.eye(3)
-# Q[-2:,-2:]=Q[0,0]*10*np.eye(2)
+a=10
+Q=a*np.eye(len(id_variables)+3)
+Q[3:-2,3:-2]=Q[0,0]/2*np.eye(Q[3:-2,3:-2].shape[0]) 
+# Q[:3,:3]=0.002*np.eye(3)
+Q[-2:,-2:]=Q[0,0]*2*np.eye(2)
 
-# b=1000*a
-# init_P=b*np.eye(len(id_variables)+3)
-# init_P[3:,3:]*=50.0
-
-# init_P[3:,3:]=1e-3*np.eye(len(id_variables))
+b=a
+init_P=b*np.eye(len(id_variables)+3)
+init_P[3:,3:]*=2.0
 
 
-# x,p,y=run(tdf,id_variables,init_P,Q=Q,R=1e-2)
+
+x,p,y=run(tdf,id_variables,init_P,Q=Q,R=1e-2)
 # df=save_df(tdf, id_variables, x, p, y)
 
-# import matplotlib.pyplot as plt
-# plt.figure()
-# plt.plot(tdf.t,x[:,0],color="red")
-# plt.plot(tdf.t,x[:,1],color="blue")
-# plt.plot(tdf.t,x[:,2],color="green")
-# plt.plot(tdf.t,tdf['speed[0]'],color="darkred")
-# plt.plot(tdf.t,tdf['speed[1]'],color="darkblue")
-# plt.plot(tdf.t,tdf['speed[2]'],color="darkgreen")
+import matplotlib.pyplot as plt
+plt.figure()
+plt.gcf().add_subplot(1,2,1)
+plt.plot(tdf.t,x[:,0],color="red")
+plt.plot(tdf.t,x[:,1],color="blue")
+plt.plot(tdf.t,x[:,2],color="green")
+plt.plot(tdf.t,tdf['speed[0]'],color="darkred")
+plt.plot(tdf.t,tdf['speed[1]'],color="darkblue")
+plt.plot(tdf.t,tdf['speed[2]'],color="darkgreen")
 
+for i,j in enumerate((id_variables)):
+    plt.gcf().add_subplot(len(id_variables),2,2*(i+1))
+    plt.plot(tdf.t,x[:,3+i],label=j)
+    plt.legend(),plt.grid()
 
-K=1e14
-
-def find_best_params(X):
     
 
-    a,a1,a2,b,b1,b2=X*K
+# K=1e14
+
+# def find_best_params(X):
     
-    a*=1e4
-    a1*=1e3
-    a2*=1e3
-    b*=1e5
-    b1*=5e3
-    b2*=5e3
+
+#     a,a1,a2,b,b1,b2=X*K
+    
+#     a*=1e4
+#     a1*=1e3
+#     a2*=1e3
+#     b*=1e5
+#     b1*=5e3
+#     b2*=5e3
     
     
     
-    Q=a*np.eye(len(id_variables)+3)
-    Q[3:-2,3:-2]=Q[0,0]/a1*np.eye(Q[3:-2,3:-2].shape[0]) 
-    # Q[:3,:3]=0.002*np.eye(3)
-    Q[-2:,-2:]=Q[0,0]*a2*np.eye(2)
+#     Q=a*np.eye(len(id_variables)+3)
+#     Q[3:-2,3:-2]=Q[0,0]/a1*np.eye(Q[3:-2,3:-2].shape[0]) 
+#     # Q[:3,:3]=0.002*np.eye(3)
+#     Q[-2:,-2:]=Q[0,0]*a2*np.eye(2)
     
-    init_P=b*np.eye(len(id_variables)+3)
-    init_P[3:,3:]*=b1
-    init_P[-2:,-2]*=b2
-    # init_P[3:,3:]=1e-3*np.eye(len(id_variables))
+#     init_P=b*np.eye(len(id_variables)+3)
+#     init_P[3:,3:]*=b1
+#     init_P[-2:,-2]*=b2
+#     # init_P[3:,3:]=1e-3*np.eye(len(id_variables))
     
-    try:
-        x,p,y=run(tdf,id_variables,init_P,Q=Q,R=1e-2)
-    except(LinAlgError):
-        x=1e5*np.ones((100,11))
-    c1_gt=1.4e-2
-    c2_gt=4e-2
-    ch1_gt=1.3e-2
-    ch2_gt=3.5e-2
-    di_gt=3e-2
-    dj_gt=3e-2
-    dk_gt=1.6
+#     try:
+#         x,p,y=run(tdf,id_variables,init_P,Q=Q,R=1e-2)
+#     except(LinAlgError):
+#         x=1e5*np.ones((100,11))
+#     c1_gt=1.4e-2
+#     c2_gt=4e-2
+#     ch1_gt=1.3e-2
+#     ch2_gt=3.5e-2
+#     di_gt=3e-2
+#     dj_gt=3e-2
+#     dk_gt=1.6
     
-    x_cost=x#[int(0.5*len(x)):]
+#     x_cost=x#[int(0.5*len(x)):]
     
-    cost_c1=np.mean(np.abs((x_cost[:,3]-c1_gt)/c1_gt))
-    cost_c2=np.mean(np.abs((x_cost[:,4]-c2_gt)/c2_gt))
-    cost_ch1=np.mean(np.abs((x_cost[:,5]-ch1_gt)/ch1_gt))
-    cost_ch2=np.mean(np.abs((x_cost[:,6]-ch2_gt)/ch2_gt))
-    cost_di=np.mean(np.abs((x_cost[:,7]-di_gt)/di_gt))
-    cost_dj=np.mean(np.abs((x_cost[:,8]-dj_gt)/dj_gt))
-    cost_dk=np.mean(np.abs((x_cost[:,9]-dk_gt)/dk_gt))
+#     cost_c1=np.mean(np.abs((x_cost[:,3]-c1_gt)/c1_gt))
+#     cost_c2=np.mean(np.abs((x_cost[:,4]-c2_gt)/c2_gt))
+#     cost_ch1=np.mean(np.abs((x_cost[:,5]-ch1_gt)/ch1_gt))
+#     cost_ch2=np.mean(np.abs((x_cost[:,6]-ch2_gt)/ch2_gt))
+#     cost_di=np.mean(np.abs((x_cost[:,7]-di_gt)/di_gt))
+#     cost_dj=np.mean(np.abs((x_cost[:,8]-dj_gt)/dj_gt))
+#     cost_dk=np.mean(np.abs((x_cost[:,9]-dk_gt)/dk_gt))
     
-    c=cost_c1
-    c+=cost_c2
-    c+=cost_ch1
-    c+=cost_ch2
-    c+=cost_di
-    c+=cost_dj
-    c+=cost_dk
-    print(a,a1,a2,b,b1,b2,c)
-    return c
+#     c=cost_c1
+#     c+=cost_c2
+#     c+=cost_ch1
+#     c+=cost_ch2
+#     c+=cost_di
+#     c+=cost_dj
+#     c+=cost_dk
+#     print(a,a1,a2,b,b1,b2,c)
+#     return c
     
-X0=np.ones(6)/K
-bns=[(0,np.inf),(0,np.inf),(0,np.inf),(0,np.inf),(0,np.inf),(0,np.inf)]
-from scipy.optimize import minimize
-sol=minimize(find_best_params,X0,bounds=bns,method="SLSQP")
+# X0=np.ones(6)/K
+# bns=[(0,np.inf),(0,np.inf),(0,np.inf),(0,np.inf),(0,np.inf),(0,np.inf)]
+# from scipy.optimize import minimize
+# sol=minimize(find_best_params,X0,bounds=bns,method="SLSQP")
 
 

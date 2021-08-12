@@ -25,7 +25,7 @@ def main_func(x):
 
     n_epochs=30
     
-    log_name="stochast_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
+    log_name="newstochast_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
 
 
     with_ct3=False
@@ -83,14 +83,14 @@ def main_func(x):
     
     b10=14.44
     
-    c10=0.018828
-    c20=0.106840
+    c10=0.0139055
+    c20=0.0386786
     c30=0.0
-    ch10=0.1
+    ch10=0.0282942
     ch20=0.1
-    di0=1.0
-    dj0=1.00
-    dk0=1.0
+    di0=0.806527
+    dj0=0.632052
+    dk0=1.59086
     vwi0=0.0
     vwj0=0.0
     kt0=5.0
@@ -709,7 +709,7 @@ def main_func(x):
                            lr=base_lr):
         
         used_jac=np.mean(jac_array,axis=0)
-        print("%s --- Propagate %s grad : "%(log_name))
+        print(" --- Propagate %s grad : "%(log_name))
         
         datatoplot=np.c_[used_jac,[id_variables[k]*scalers[k] for k in id_variables.keys()]].T
         toplot=pd.DataFrame(data=datatoplot,columns=id_variables.keys(),index=['J','value'])
@@ -864,7 +864,7 @@ def main_func(x):
                     bnds=[bounds[i] for i in id_variables]
                     
                     writtargs=[n,k,val_sc_a,val_sc_v,total_sc_a,total_sc_v,time.time()]
-                    
+                       
                     sol_scipy=minimize(fun_cost_scipy,
                                        X_start,
                                        args=(batch_,scalers,writtargs),
@@ -896,7 +896,10 @@ def main_func(x):
                                                                                                       k+N_train_batches,len(temp_shuffled_batches),
                                                                                                       np.sqrt(np.mean(square_error_a,axis=0)),
                                                                                                       np.sqrt(np.mean(square_error_v,axis=0))))
-        
+                    realvals={}
+                    for i in id_variables.keys():
+                        realvals[i]=id_variables[i]*scalers[i]
+                        
                     saver(name="epoch_%i_batch_%i"%(n,k+N_train_batches),save_path=spath,
                       id_variables=realvals,
                       train_sc_a=train_sc_a,
@@ -950,8 +953,8 @@ if __name__ == '__main__':
     # ns_range=['all',25,5,-1]
     # fit_arg_range=[True,False]
     
-    blr_range=[1e-3,1e-4,1e-5]
-    ns_range=[-1]
+    blr_range=[1e-2,1e-3]
+    ns_range=[5]
     fit_arg_range=[True,False]
     
     rem=[[True, 5e-3, 25],
@@ -960,10 +963,11 @@ if __name__ == '__main__':
     
     x_r=[[i,j,k] for j in blr_range for i in  fit_arg_range  for k in ns_range ]
     x_r=[i for i in x_r if i not in rem]
-    
+    x_r=[[True, 0.0001, -1], [False, 0.0001, -1], [True, 1e-05, -1], [False, 1e-05, -1]]
     
     print(x_r)
 
     pool = Pool(processes=4)
+    alidhali=input('LAUNCH ? ... \n >>>>')
     pool.map(main_func, x_r)
 

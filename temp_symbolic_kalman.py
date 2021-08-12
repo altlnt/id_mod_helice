@@ -9,17 +9,15 @@ import sys
 import numpy as np
 # %% Control Booleans
 "regresion on a"
+fit_on_v=fit_arg
+used_logged_v_in_model=not fit_arg
 
-# fit_on_v=fit_arg
-fit_on_v=False
-# used_logged_v_in_model=not fit_on_v
-used_logged_v_in_model=True
 
-model_motor_dynamics=False
+model_motor_dynamics=True
 
 
 
-log_name="test5_fit_v_%s"%(str(fit_on_v))
+log_name="stochast_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
 
 
 with_ct3=False
@@ -62,6 +60,7 @@ id_time_const=model_motor_dynamics
 log_path="/logs/vol12/log_real_processed.csv"
 
 
+
 mass=369 #batterie
 mass+=1640-114 #corps-carton
 mass/=1e3
@@ -78,18 +77,14 @@ b10=14.44
 c10=0.018828
 c20=0.106840
 c30=0.0
-ch10=0.0
-ch20=0.0
-di0=0
-dj0=0.0
-dk0=0.0
+ch10=0.1
+ch20=0.1
+di0=1.0
+dj0=1.00
+dk0=1.0
 vwi0=0.0
 vwj0=0.0
 kt0=5.0
-
-Q0=1e-10
-R0=1e-2
-
 
 physical_params=[mass,
 Area,
@@ -145,6 +140,11 @@ metap={"model_motor_dynamics":model_motor_dynamics,
         "approx_x_plus_y":approx_x_plus_y,
         "di_equal_dj":di_equal_dj,
         "log_path":log_path,
+        "base_lr":base_lr,
+        "grad_autoscale":grad_autoscale,
+        "n_epochs":n_epochs,
+        "nsecs":nsecs,
+        "train_proportion":train_proportion,
         "[mass,Area,r,rho,kv_motor,pwmmin,pwmmax,U_batt,b1,c10,c20,c30,ch10,ch20,di0,dj0,dk0,vwi0,vwj0,kt0]":physical_params,
         "bounds":bounds}
 
@@ -161,19 +161,15 @@ import time
 if log_name=="":
     log_name=str(datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S"))
     
-spath=os.path.join(os.getcwd(),"result_kalman",log_name)
-try:
-    os.rmdir(spath)
-except:
-    pass
+spath=os.path.join(os.getcwd(),"results",log_name)
+
 os.makedirs(spath)
 
 with open(os.path.join(spath,'data.json'), 'w') as fp:
     json.dump(metap, fp)
 
 import pandas as pd
-
-def saver(name=None,save_path=os.path.join(os.getcwd(),"result_kalman"),**kwargs):
+def saver(name=None,save_path="/home/alex/Documents/identification_modele_hélice/results/",**kwargs):
     
     D={}
     dname=str(int(time.time())) if (name is None) else name
@@ -190,9 +186,9 @@ def saver(name=None,save_path=os.path.join(os.getcwd(),"result_kalman"),**kwargs
         
 # %% SYMPY
 from sympy import *
-t0=time.time()
+
 dt=symbols('dt',positive=True,real=True)
-m=symbols('m',real=True,positive=True)
+m=symbols('m',reals=True,positive=True)
 
 
 m_s=m
@@ -203,10 +199,10 @@ R=Matrix([[r1,r2,r3],
           [r7,r8,r9]])
 
 
-# vlog_i,vlog_j,vlog_k=symbols("vlog_i,vlog_j,vlog_k",real=True)
-vpred_i,vpred_j,vpred_k=symbols("vpred_i,vpred_j,vpred_k",real=True)
+vlog_i,vlog_j,vlog_k=symbols("vlog_i,vlog_j,vlog_k",real=True)
 
-v_i,v_j,v_k=(vpred_i,vpred_j,vpred_k) 
+
+v_i,v_j,v_k=(vlog_i,vlog_j,vlog_k) 
 
 
 vw_i,vw_j=symbols('vw_i,vw_j',real=True)
@@ -243,7 +239,7 @@ omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6=symbols('omega_c1,omega_c2
 omegas_c=Matrix([omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6])
 omegas=Matrix([omega_1,omega_2,omega_3,omega_4,omega_5,omega_6])
 
-omegas= omegas_c
+omegas=omegas+dt*kt*(omegas_c-omegas) if model_motor_dynamics else omegas_c
 
 t2=time.time()
 print("Elapsed : %f s , Prev step time: %f s \\ Solving blade model ..."%(t2-t0,t2-t1))
@@ -260,25 +256,25 @@ c1,c2,c3=symbols('c1,c2,c3',real=True)
 ch1,ch2=symbols('ch1,ch2',real=True)
 
 
-vi=symbols('eta',real=True)
+vi=symbols('eta',reals=True)
 
 v2=symbols('v2')
 v3=symbols('v3')
 
 if vanilla_force_model:
-    T_sum=-c1*sum([ omegas[i]**2 for i in range(6)])*R@k_vect
-    H_sum=0.0*k_vect
+    T_sum=-c1_s*sum([ omegas[i]**2 for i in range(6)])*R@k_vect
+    H_sum=0*k_vect
 else:
 
     T_BET=rho*A*r*omega*(c1*r*omega-c2*(vi-v3)) if not with_ct3 else rho*A*r*omega*(c1*omega*r-c2*(vi-v3)+c3*v2**2)
     
     if structural_relation_idc1:
-        T_BET=T_BET.subs(c2, b1*c1-2.0/b1)
+        T_BET=T_BET.subs(c2, b1*c1-2/b1)
     
     if structural_relation_idc2:
         T_BET=T_BET.subs(c1, c2/b1+2/b1*b1)
         
-    T_MOMENTUM_simp=2.0*rho*A*vi*((vi-v3)+v2) if approx_x_plus_y else 2.0*rho*A*vi*(vi-v3)
+    T_MOMENTUM_simp=2*rho*A*vi*((vi-v3)+v2) if approx_x_plus_y else 2*rho*A*vi*(vi-v3)
     eq_MOMENTUM_simp=T_BET-T_MOMENTUM_simp
     
     eta=simplify(Matrix([solve(eq_MOMENTUM_simp,vi)[1]])).subs(v3,va_body[2,0]).subs(v2,sqrt(va_body[0,0]**2+va_body[1,0]**2))
@@ -300,7 +296,7 @@ print("Elapsed : %f s , Prev step time: %f s \\ Solving lifrdrag model ..."%(t3-
 di,dj,dk=symbols('di,dj,dk',real=True,positive=True)
 
 D=diag(di,di,dk) if di_equal_dj else diag(di,dj,dk)
-Fa=-simplify(rho*A*va_NED.norm()*R@D@R.T@va_NED)
+Fa=-simplify(rho*A*va_NED.norm()*R@D*R.T@va_NED)
 
 
 t35=time.time()
@@ -308,21 +304,21 @@ print("Elapsed : %f s , Prev step time: %f s \\ Solving Dynamics ..."%(t35-t0,t3
 
 g=9.81
 new_acc=simplify(g*k_vect+T_sum/m+H_sum/m+Fa/m)
-new_v=simplify(v+dt*new_acc)
+new_v=v+dt*new_acc
 
 t37=time.time()
 print("Elapsed : %f s , Prev step time: %f s \\ Generating costs ..."%(t37-t0,t37-t35))
 
-# alog_i,alog_j,alog_k=symbols("alog_i,alog_j,alog_k",real=True)
-# alog=Matrix([[alog_i],[alog_j],[alog_k]])
+alog_i,alog_j,alog_k=symbols("alog_i,alog_j,alog_k",real=True)
+alog=Matrix([[alog_i],[alog_j],[alog_k]])
 
-# vnext_i,vnext_j,vnext_k=symbols("vnext_i,vnext_j,vnext_k",real=True)
-# vnext_log=Matrix([[vnext_i],[vnext_j],[vnext_k]])
+vnext_i,vnext_j,vnext_k=symbols("vnext_i,vnext_j,vnext_k",real=True)
+vnext_log=Matrix([[vnext_i],[vnext_j],[vnext_k]])
 
 " constructing opti variables "
 " WARNING SUPER WARNING : the order must be the same as in id_variables !!!"
 
-id_variables_sym=[v_i,v_j,v_k]
+id_variables_sym=[]
 
 id_variables_sym.append(m) if id_mass else None 
 
@@ -356,6 +352,12 @@ print("Elapsed : %f s , Prev step time: %f s \\ Gathering identification paramet
 
 t5=time.time()
 
+obs_=new_v if fit_on_v else new_acc
+
+obs_jac_=obs_func.jacobian(id_variables_sym)
+
+
+
 
 t6=time.time()
 print("Elapsed : %f s , Prev step time: %f s \\ Lambdification ..."%(t6-t0,t6-t5))
@@ -369,52 +371,40 @@ di,dj,dk,
 vw_i,vw_j,
 kt,
 dt,
+vlog_i,vlog_j,vlog_k,
 vpred_i,vpred_j,vpred_k,
-# vlog_i,vlog_j,vlog_k,
-# alog_i,alog_j,alog_k,
-r1,r2,r3,r4,r5,r6,r7,r8,r9,
-omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6)
+alog_i,alog_j,alog_k,
+vnext_i,vnext_j,vnext_k,r1,r2,r3,r4,r5,r6,r7,r8,r9,
+omega_1,omega_2,omega_3,omega_4,omega_5,omega_6,
+omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6,
+m_scale,A_scale,r_scale,c1_scale,c2_scale,c3_scale,
+ch1_scale,ch2_scale,di_scale,dj_scale,dk_scale,
+vw_i_scale,vw_j_scale,kt_scale)
 
 
+# Y=Matrix([new_acc,new_v,omegas,sqerr_a,sqerr_v,Ja.T,Jv.T])
+# model_func=lambdify(X,Y, modules='numpy')
 
+obs_func_= lambdify(X,obs_, modules='cupy')
+jac_obs_func_ =  lambdify(X,obs_jac_, modules='cupy')
 
-trans_=Matrix([new_v])
-trans_jac_=trans_.jacobian(id_variables_sym)
-trans_func_=lambdify(X,trans_, modules='numpy')
-trans_jac_func_ =  lambdify(X,trans_jac_, modules='numpy')
-
-
-obs_=new_v 
-obs_jac_=obs_.jacobian(id_variables_sym)
-
-obs_func_= lambdify(X,obs_, modules='numpy')
-jac_obs_func_ =  lambdify(X,obs_jac_, modules='numpy')
 
 t7=time.time()
 print("Elapsed : %f s , Prev step time: %f s \\ Done ..."%(t7-t0,t7-t6))
 
-test_trans_=trans_
-print(trans_[0])
-
-print(type(trans_[0]))
-for i in X:
-    test_trans_=test_trans_.subs(i,1.0)
-print(test_trans_)
-
 "cleansing memory"
-del(m,A,r,rho,
+del(dt,m,
+vlog_i,vlog_j,vlog_k,
+alog_i,alog_j,alog_k,
+vnext_i,vnext_j,vnext_k,
+vw_i,vw_j,
+kt,
 b1,
 c1,c2,c3,
 ch1,ch2,
 di,dj,dk,
-vw_i,vw_j,
-kt,
-dt,
-vpred_i,vpred_j,vpred_k,
-v_i,v_j,v_k,
-# vlog_i,vlog_j,vlog_k,
-# alog_i,alog_j,alog_k,
-r1,r2,r3,r4,r5,r6,r7,r8,r9,
+rho,A,r,r1,r2,r3,r4,r5,r6,r7,r8,r9,R,
+omega_1,omega_2,omega_3,omega_4,omega_5,omega_6,
 omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6)
 
 # %%   ####### Identification Data Struct
@@ -481,7 +471,7 @@ for j in rem:
     del(non_id_variables[j])
 
 for i in id_variables.keys():
-    id_variables[i]=id_variables[i]
+    id_variables[i]=id_variables[i]/scalers[i]
 
 print("\n ID VARIABLES:")
 print(id_variables,"\n")
@@ -490,15 +480,6 @@ print(id_variables,"\n")
 print("\n NON ID VARIABLES:")
 print(non_id_variables,"\n")
     
-
-print("\n INIT_COV :")
-P_init={}
-for k in id_variables.keys():
-    P_init[k]=(1e-5*abs(id_variables[k]))**2
-
-print(non_id_variables,"\n")
-    
-
 # %%   ####### IMPORT DATA 
 print("LOADING DATA...")
 import pandas as pd
@@ -548,31 +529,30 @@ print("DATA PROCESS DONE")
 # %% Run funcs
 from numba import jit
 
-# @jit
+@jit
 def X_to_dict(X,keys_=id_variables.keys()):
     out_dict={}
     for i,key in enumerate(keys_):
         out_dict[key]=X[i]
     return out_dict
 
-# @jit
+@jit
 def dict_to_X(input_dict):
     return np.array([input_dict[key] for key in input_dict])
 
 import transforms3d as tf3d
-
-def arg_wrapping(batch,id_variables,vpred,data_index):
+@jit
+def arg_wrapping(batch,id_variables,data_index):
     
     i=data_index
 
 
     dt=min(batch['dt'][i],1e-2)
     m=mass
-    # vlog_i,vlog_j,vlog_k=batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i]
+    vlog_i,vlog_j,vlog_k=batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i]
 
-    # alog_i,alog_j,alog_k=batch['acc_ned_grad[0]'][i],batch['acc_ned_grad[1]'][i],batch['acc_ned_grad[2]'][i]
+    alog_i,alog_j,alog_k=batch['acc_ned_grad[0]'][i],batch['acc_ned_grad[1]'][i],batch['acc_ned_grad[2]'][i]
 
-    v_i,v_j_,v_k=vpred
     
     m=non_id_variables['m'] if 'm' in non_id_variables else id_variables['m']
     vw_i=non_id_variables['vw_i'] if 'vw_i' in non_id_variables else id_variables['vw_i']
@@ -597,8 +577,8 @@ def arg_wrapping(batch,id_variables,vpred,data_index):
 
             
 
-
-    X=np.array([m,A,r,rho,
+    
+    X=(m,A,r,rho,
     b1,
     c1,c2,c3,
     ch1,ch2,
@@ -606,212 +586,62 @@ def arg_wrapping(batch,id_variables,vpred,data_index):
     vw_i,vw_j,
     kt,
     dt,
-    v_i,v_j_,v_k,
-    # vlog_i,vlog_j,vlog_k,
-    # alog_i,alog_j,alog_k,
+    vlog_i,vlog_j,vlog_k,
+    alog_i,alog_j,alog_k,
     *R.flatten(),
-    omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6],dtype=np.float64)
-    return X
-
-# @jit
-def ekf_run_step(batch,id_var,vpred,P_prev,data_index,Q=Q0,R=R0):
+    omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6)
     
-    X_arg=arg_wrapping(batch,id_var,vpred,data_index)
-    # print(X_arg,[type(i) for i in X_arg])
-    x=dict_to_X(id_variables).reshape((-1,1))
+    return X
+    
+@jit
+def ekf_run_step(batch,id_variables,P_prev,data_index,Q=Q0,R=R0):
+    
+    X_arg=arg_wrapping(batch,id_variables,data_index)
+    x=dict_to_X().reshape((-1,1))
     P=P_prev
     
-    speed_pred=trans_func_(*X_arg)
+    x_pred=x
+    P_pred=P+Q
     
-    # print(speed_pred)
-    x_pred=np.r_[speed_pred.flatten(),x.flatten()].reshape((-1,1))
-    # x_pred=np.r_[vpred.flatten(),x.flatten()].reshape((-1,1))
+    H=jac_obs_func_(X_arg)
     
-    F=trans_jac_func_(*X_arg)
-    # # print(F.shape)
-    Ftot=np.eye(len(x_pred))
-    # # print(Ftot.shape)
-    Ftot[:3,:]=F
-    P_pred=Ftot@P@Ftot.T+Q
-    
-    H=jac_obs_func_(*X_arg)
-    H=np.zeros(shape=(3,len(x_pred)))
-    H[:3,:3]=np.eye(3)
-    
-    vlog_i,vlog_j,vlog_k=(batch['speed[0]'][data_index],
-                        batch['speed[1]'][data_index],
-                        batch['speed[2]'][data_index])
+    vlog_i,vlog_j,vlog_k=batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i]
+    alog_i,alog_j,alog_k=batch['acc_ned_grad[0]'][i],batch['acc_ned_grad[1]'][i],batch['acc_ned_grad[2]'][i]
     
     
-    mes=np.array([vlog_i,vlog_j,vlog_k]).reshape((-1,1))
-    y_pred_ = obs_func_(*X_arg).reshape((-1,1))
+    mes= np.array((vlog_i,vlog_j,vlog_k) if fit_on_v else (alog_i,alog_j,alog_k)).reshape((-1,1))
+    y_pred_ = obs_func_(X_arg)
     
     innovation = mes - y_pred_
-    innovation_cov_ = H @P_pred@ (H.T) + R
-    # # innovation_cov_ = 0.5*(innovation_cov_+innovation_cov_.T)
-    
+    innovation_cov_ = H @ P_pred @ (H).T + R
     innovation_cov_inverse_ = np.linalg.inv(innovation_cov_)
     kalman_gain_ = P_pred @ (H.T) @ innovation_cov_inverse_
-    # kalman_gain_[3:,:]*=0
-    # print(x_pred)
+    
     x_pred_update_ = x_pred + kalman_gain_ @ innovation
     P_pred_update_ = (np.eye(P_pred.shape[0])-kalman_gain_@H)@P_pred
     
-    return x_pred_update_.flatten() , P_pred_update_ , y_pred_.flatten()
+    return x_pred_update_ , P_pred_update_ , y_pred_
 
 
-
-
-def run(data,id_var,init_P=None,Q=0,R=0):
-    N=3+len(id_var)
-
+def run(data,id_var,P=P0,Q=Q0,R=R0):
+    
     current_dict=id_var
     
-    
-    P0=1e-3*np.eye(N) if init_P is None else init_P
-    
-    
-    x_=np.zeros((len(data),N))
-    P_=np.zeros((len(data),N,N))
+    x_=np.zeros((len(data),len(id_var)))
+    P_=np.zeros((len(data),len(id_var),len(id_var)))
     y_=np.zeros((len(data),3))
 
-    x_[0]=np.r_[data['speed[0]'].values[0],
-                data['speed[1]'].values[0],
-                data['speed[2]'].values[0],
-                dict_to_X(id_var)]
+    x_[0]=dict_to_X(id_var)
     P_[0]=P0
-    # print(P0)
-    for j,i in enumerate(data.index):
-        
-        print("\r Running ...  %i / %i "%(i,max(data.index)), end='', flush=True)
-
-        if j>0:
-            
-
+    
+    for j,i in enumerate(batch.index):
+        if j>1:
+            current_dict=X_to_dict(x_[j-1])
             P_prev=P_[j-1]
-            speed_prev=x_[j-1][:3]
             data_index=i
-            x_tmp,P_tmp, y_tmp = ekf_run_step(data,current_dict,speed_prev,P_prev,data_index,Q=Q,R=R)
-            
-            x_tmp[3:]=np.array([np.clip(l,*bounds[k]) for (l,k) in zip(x_tmp[3:],id_var.keys())])
-            # x_tmp[3:]=x_[j-1][3:]
-            # P_tmp=0.5*(P_tmp+P_tmp.T)
-            P_diag=np.diag(P_tmp)
-            indexes_to_rest=[l for l in range(len(P_diag)) if P_diag[l]<0]
-            for index_ in indexes_to_rest:
-                P_tmp[index_,:],P_tmp[:,index_]=P0[index_,:],P0[:,index_]
-            
-            
-            # P_tmp=np.clip(P_tmp,0,np.inf)
-            # print(P_tmp)
-            current_dict=X_to_dict(x_tmp[3:])
-            P_tmp=0.5*(P_tmp+P_tmp.T)
+            x_tmp,P_tmp, y_tmp = ekf_run_step(data,current_dict,P_prev,data_index,Q=Q0_,R=R0)
             x_[j],P_[j],y_[j] = x_tmp,P_tmp, y_tmp
-            # break
-
+            current_dict=X_to_dict(x_tmp)
     return x_,P_,y_
 
-def save_df(data,id_var,
-            x_,P_,y_,
-            spath=os.path.join(os.getcwd(),"result_kalman",log_name,"output.csv")):
-    
-    covkeys=["cov_%i"%(i) for i in range(len(P_[0].flatten()))]
-    meskeys=["mes_%i"%(i) for i in range(len(y_[0].flatten()))]
-    colnames=["speed_0","speed_1","speed_2"]+[i for i in id_var.keys()]+covkeys+meskeys
-    df_data=np.c_[x_,P_.reshape(len(data),P_.shape[1]**2),y_]
-    df=pd.DataFrame(data=df_data,columns=colnames,index=data.index)
-    df.to_csv(spath)
-    return df
-
-tdf=data_prepared[:int(len(data_prepared)/20)]
-
-# a=100
-# Q=a*np.eye(len(id_variables)+3)
-# Q[3:-2,3:-2]=Q[0,0]/10*np.eye(Q[3:-2,3:-2].shape[0]) 
-# # Q[:3,:3]=0.002*np.eye(3)
-# Q[-2:,-2:]=Q[0,0]*10*np.eye(2)
-
-# b=1000*a
-# init_P=b*np.eye(len(id_variables)+3)
-# init_P[3:,3:]*=50.0
-
-# init_P[3:,3:]=1e-3*np.eye(len(id_variables))
-
-
-# x,p,y=run(tdf,id_variables,init_P,Q=Q,R=1e-2)
-# df=save_df(tdf, id_variables, x, p, y)
-
-# import matplotlib.pyplot as plt
-# plt.figure()
-# plt.plot(tdf.t,x[:,0],color="red")
-# plt.plot(tdf.t,x[:,1],color="blue")
-# plt.plot(tdf.t,x[:,2],color="green")
-# plt.plot(tdf.t,tdf['speed[0]'],color="darkred")
-# plt.plot(tdf.t,tdf['speed[1]'],color="darkblue")
-# plt.plot(tdf.t,tdf['speed[2]'],color="darkgreen")
-
-
-K=1e14
-
-def find_best_params(X):
-    
-
-    a,a1,a2,b,b1,b2=X*K
-    
-    a*=1e4
-    a1*=1e3
-    a2*=1e3
-    b*=1e5
-    b1*=5e3
-    b2*=5e3
-    
-    
-    
-    Q=a*np.eye(len(id_variables)+3)
-    Q[3:-2,3:-2]=Q[0,0]/a1*np.eye(Q[3:-2,3:-2].shape[0]) 
-    # Q[:3,:3]=0.002*np.eye(3)
-    Q[-2:,-2:]=Q[0,0]*a2*np.eye(2)
-    
-    init_P=b*np.eye(len(id_variables)+3)
-    init_P[3:,3:]*=b1
-    init_P[-2:,-2]*=b2
-    # init_P[3:,3:]=1e-3*np.eye(len(id_variables))
-    
-    try:
-        x,p,y=run(tdf,id_variables,init_P,Q=Q,R=1e-2)
-    except(LinAlgError):
-        x=1e5*np.ones((100,11))
-    c1_gt=1.4e-2
-    c2_gt=4e-2
-    ch1_gt=1.3e-2
-    ch2_gt=3.5e-2
-    di_gt=3e-2
-    dj_gt=3e-2
-    dk_gt=1.6
-    
-    x_cost=x#[int(0.5*len(x)):]
-    
-    cost_c1=np.mean(np.abs((x_cost[:,3]-c1_gt)/c1_gt))
-    cost_c2=np.mean(np.abs((x_cost[:,4]-c2_gt)/c2_gt))
-    cost_ch1=np.mean(np.abs((x_cost[:,5]-ch1_gt)/ch1_gt))
-    cost_ch2=np.mean(np.abs((x_cost[:,6]-ch2_gt)/ch2_gt))
-    cost_di=np.mean(np.abs((x_cost[:,7]-di_gt)/di_gt))
-    cost_dj=np.mean(np.abs((x_cost[:,8]-dj_gt)/dj_gt))
-    cost_dk=np.mean(np.abs((x_cost[:,9]-dk_gt)/dk_gt))
-    
-    c=cost_c1
-    c+=cost_c2
-    c+=cost_ch1
-    c+=cost_ch2
-    c+=cost_di
-    c+=cost_dj
-    c+=cost_dk
-    print(a,a1,a2,b,b1,b2,c)
-    return c
-    
-X0=np.ones(6)/K
-bns=[(0,np.inf),(0,np.inf),(0,np.inf),(0,np.inf),(0,np.inf),(0,np.inf)]
-from scipy.optimize import minimize
-sol=minimize(find_best_params,X0,bounds=bns,method="SLSQP")
-
-
+def save_as_json_and_df():
