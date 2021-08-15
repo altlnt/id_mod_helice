@@ -23,9 +23,9 @@ def main_func(x):
     nsecs=ns
     model_motor_dynamics=True
 
-    n_epochs=30
+    n_epochs=20
     
-    log_name="newstochast_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
+    log_name="postcrashVRAILOG_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
 
 
     with_ct3=False
@@ -66,7 +66,7 @@ def main_func(x):
     
     # log_path="/logs/vol1_ext_alcore/log_real.csv"
     # log_path="/logs/vol1_ext_alcore/log_real.csv"
-    log_path="/logs/vol12/log_real_processed.csv"
+    log_path="./logs/vol12/log_real_processed.csv"
     
     
     
@@ -538,8 +538,7 @@ def main_func(x):
     print("LOADING DATA...")
     import pandas as pd
     
-    log_path="./logs/vol1_ext_alcore/log_real_processed.csv"
-    # log_path="./logs/vol12/log_real.csv"
+   # log_path="./logs/vol12/log_real.csv"
     
     raw_data=pd.read_csv(log_path)
     
@@ -849,14 +848,16 @@ def main_func(x):
                     for i in id_variables.keys():
                         realvals[i]=id_variables[i]*scalers[i]
 
-                    saver(name="epoch_%i_batch_%i"%(n,k),save_path=spath,
-                      id_variables=realvals,
-                      train_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
-                      train_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
-                      val_sc_a=val_sc_a,
-                      val_sc_v=val_sc_v,
-                      total_sc_a=total_sc_a,
-                      total_sc_v=total_sc_v)
+                    if ns!=-1 or k//100==0 :
+
+                        saver(name="epoch_%i_batch_%i"%(n,k),save_path=spath,
+                          id_variables=realvals,
+                          train_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
+                          train_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
+                          val_sc_a=val_sc_a,
+                          val_sc_v=val_sc_v,
+                          total_sc_a=total_sc_a,
+                          total_sc_v=total_sc_v)
                     
                 elif fit_strategy=="scipy":
                     
@@ -953,8 +954,8 @@ if __name__ == '__main__':
     # ns_range=['all',25,5,-1]
     # fit_arg_range=[True,False]
     
-    blr_range=[1e-2,1e-3]
-    ns_range=[5]
+    blr_range=['scipy']
+    ns_range=[15]
     fit_arg_range=[True,False]
     
     rem=[[True, 5e-3, 25],
@@ -963,11 +964,24 @@ if __name__ == '__main__':
     
     x_r=[[i,j,k] for j in blr_range for i in  fit_arg_range  for k in ns_range ]
     x_r=[i for i in x_r if i not in rem]
-    x_r=[[True, 0.0001, -1], [False, 0.0001, -1], [True, 1e-05, -1], [False, 1e-05, -1]]
     
-    print(x_r)
+    x_r=[[True, 'scipy', 15],
+         [False, 'scipy', 15],
+         [True, 'scipy', 'all'],
+         [False, 'scipy', 'all'],
+         [True, 1e-6, -1],
+         # [False, 1e-6, -1],
+         [True, 1e-5, -1],
+         # [False, 1e-5, -1],
+         # [True, 1e-4, -1],
+         # [True, 1e-3, 5],
+         [False, 1e-5, 5],
+         [True, 'scipy', 25],
+         [False, 'scipy', 25]]
+    
+    print(x_r,len(x_r))
 
-    pool = Pool(processes=4)
+    pool = Pool(processes=len(x_r))
     alidhali=input('LAUNCH ? ... \n >>>>')
     pool.map(main_func, x_r)
 
