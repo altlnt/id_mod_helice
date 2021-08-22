@@ -1,9 +1,0 @@
-Procédure :
-
-0 - Débuter avec le modèle le plus simple possible, puis complexifier
-
-1 - Passe avec descente de gradient saturée pour le delta relatif pdt la propagation , pour obtenir les ordres de grandeurs
-
-2 - Implémentation des ordres de grandeurs, descente de gradient naturelle
-
-

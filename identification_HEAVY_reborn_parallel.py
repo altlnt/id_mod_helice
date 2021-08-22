@@ -25,7 +25,7 @@ def main_func(x):
 
     n_epochs=20
     
-    log_name="postcrashVRAILOG_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
+    log_name="postvacances_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
 
 
     with_ct3=False
@@ -955,29 +955,29 @@ if __name__ == '__main__':
     # fit_arg_range=[True,False]
     
     blr_range=['scipy']
-    ns_range=[15]
+    ns_range=['all']
     fit_arg_range=[True,False]
     
-    rem=[[True, 5e-3, 25],
-         [False, 5e-3, 25]]
+    # rem=[[True, 5e-3, 25],
+    #      [False, 5e-3, 25]]
     
     
     x_r=[[i,j,k] for j in blr_range for i in  fit_arg_range  for k in ns_range ]
-    x_r=[i for i in x_r if i not in rem]
+    # x_r=[i for i in x_r if i not in rem]
     
-    x_r=[[True, 'scipy', 15],
-         [False, 'scipy', 15],
-         [True, 'scipy', 'all'],
-         [False, 'scipy', 'all'],
-         [True, 1e-6, -1],
-         # [False, 1e-6, -1],
-         [True, 1e-5, -1],
-         # [False, 1e-5, -1],
-         # [True, 1e-4, -1],
-         # [True, 1e-3, 5],
-         [False, 1e-5, 5],
-         [True, 'scipy', 25],
-         [False, 'scipy', 25]]
+    # x_r=[[True, 'scipy', 15],
+    #      [False, 'scipy', 15],
+    #      [True, 'scipy', 'all'],
+    #      [False, 'scipy', 'all'],
+    #      [True, 1e-6, -1],
+    #      # [False, 1e-6, -1],
+    #      [True, 1e-5, -1],
+    #      # [False, 1e-5, -1],
+    #      # [True, 1e-4, -1],
+    #      # [True, 1e-3, 5],
+    #      [False, 1e-5, 5],
+    #      [True, 'scipy', 25],
+    #      [False, 'scipy', 25]]
     
     print(x_r,len(x_r))
 
