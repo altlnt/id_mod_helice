@@ -204,9 +204,15 @@ def main_func(x):
     if log_name=="":
         log_name=str(datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S"))
         
+    
     spath=os.path.join(os.getcwd(),"results_tests",log_name)
     # spath=os.path.join("/run/user/1000/gvfs/google-drive:host=gadz.org,user=alexandre.letalenet/1-Z7CSWQlxRI7RCMOGTiomoKJjTiitVMx"
     #                    ,"resultats_test",log_name)
+    import shutil
+    try:
+        shutil.rmtree(spath)
+    except:
+        pass
     os.makedirs(spath)
     
     with open(os.path.join(spath,'data.json'), 'w') as fp:
@@ -228,7 +234,8 @@ def main_func(x):
         
         with open(os.path.join(save_path,'%s.json'%(dname)), 'w') as fp:
             json.dump(D, fp)
-    
+        return None
+
     
     
     # %%   ####### SYMPY PROBLEM 
@@ -744,18 +751,25 @@ def main_func(x):
         
     
         print(toplot.transpose())
+        del(toplot)
+
         
-        new_dic=copy.deepcopy(id_variables)
+
+        new_dic={}
+        for k in id_variables:
+            new_dic[k]=id_variables[k]
         
         for i,key in enumerate(id_variables):
             new_dic[key]=np.clip(id_variables[key]-lr*used_jac[i],bounds[key][0],bounds[key][1])
             
         return new_dic
     
-    def X_to_dict(X,keys_=id_variables.keys()):
+    def X_to_dict(X,base_dict=id_variables):
         out_dict={}
-        for i,key in enumerate(keys_):
-            out_dict[key]=X[i]
+        index_j=0
+        for i,key in enumerate(base_dict.keys()):
+                out_dict[key]=X[index_j:index_j+len(base_dict[key])] if isinstance(base_dict[key],np.ndarray) else X[index_j] 
+                index_j+=len(base_dict[key]) if isinstance(base_dict[key],np.ndarray) else 1
         return out_dict
     
     def dict_to_X(input_dict):
@@ -765,7 +779,10 @@ def main_func(x):
         if not wind_signal:
             return id_var
         else:
-            newdic=copy.deepcopy(id_var)
+            newdic={}
+            for k in id_var:
+                newdic[k]=id_var[k]
+
             newdic['vw_i'],newdic['vw_j']=newdic['vw_i'][index],newdic['vw_j'][index]
             return newdic
     
@@ -791,6 +808,8 @@ def main_func(x):
         toplot=pd.DataFrame(data=datatoplot,columns=id_var.keys(),index=['J','value'])
         print("\n %s------ Cost (in scipy minim): %f\n"%(log_name,C))
         print(toplot.transpose())
+        del(toplot)
+
         
 
         realvals={}
@@ -813,6 +832,7 @@ def main_func(x):
     
     # %% Train loop
     from scipy.optimize import minimize
+    import gc
     
     def train_loop(data_batches,id_var,n_epochs=n_epochs):
     
@@ -869,7 +889,9 @@ def main_func(x):
             
             for k,batch_ in enumerate(temp_shuffled_batches[:N_train_batches]):
                 
-                save_indexes=np.arange(0,N_train_batches,N_train_batches//10)
+                save_indexes=np.arange(0,N_train_batches,max(N_train_batches//25,1))
+                # save_indexes=np.arange(0,N_train_batches,1)
+
                 write_this_step=(k in save_indexes) or ns=='all'
                 
                 if fit_strategy not in ('custom_gradient','scipy'):
@@ -878,7 +900,7 @@ def main_func(x):
                                         
                 if fit_strategy=="custom_gradient":
                 
-                    acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
+                    _,_,_,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
                     
                     new_id_variables=propagate_gradient(jac_error_v if fit_on_v else jac_error_a,prepare_dict(id_variables, k))
                     
@@ -918,7 +940,10 @@ def main_func(x):
                             windsave_df=pd.DataFrame(data=np.array([id_variables['vw_i'],id_variables['vw_j']]).T,columns=['w_i','w_j'])
                             nsave="WINDSIG_epoch_%i_batch_%i"%(n,k)+".csv"
                             windsave_df.to_csv(os.path.join(spath,nsave))
-                    
+                            del(windsave_df)
+
+                        gc.collect()
+                        
                 elif fit_strategy=="scipy":
                     
                     X_start=dict_to_X(prepare_dict(id_variables,k))
@@ -955,14 +980,18 @@ def main_func(x):
                         windsave_df=pd.DataFrame(data=np.array([id_variables['vw_i'],id_variables['vw_j']]).T,columns=['w_i','w_j'])
                         nsave="WINDSIG_epoch_%i_batch_%i"%(n,k)+".csv"
                         windsave_df.to_csv(os.path.join(spath,nsave))
+                        del(windsave_df)
 
+
+                    gc.collect() if write_this_step else None
+                    
             train_sc_a/=N_train_batches
             train_sc_v/=N_train_batches
             
             if ns!="all":
                 for k,batch_ in enumerate(temp_shuffled_batches[N_train_batches:]):
         
-                    save_indexes=np.arange(0,N_val_batches,N_val_batches//10)
+                    save_indexes=np.arange(0,N_val_batches,max(N_val_batches//25,1))
                     write_this_step=(k in save_indexes) or ns=='all'
 
                     acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
@@ -993,7 +1022,9 @@ def main_func(x):
                             windsave_df=pd.DataFrame(data=np.array([id_variables['vw_i'],id_variables['vw_j']]).T,columns=['w_i','w_j'])
                             nsave="WINDSIG_epoch_%i_batch_%i"%(n,k)+".csv"
                             windsave_df.to_csv(os.path.join(spath,nsave))
-            
+                            del(windsave_df)
+                        gc.collect()
+
             if N_val_batches!=0:
                 val_sc_a/=N_val_batches
                 val_sc_v/=N_val_batches
@@ -1030,6 +1061,7 @@ def main_func(x):
                 windsave_df=pd.DataFrame(data=np.array([id_variables['vw_i'],id_variables['vw_j']]).T,columns=['w_i','w_j'])
                 nsave="WINDSIG_epoch_%i"%(n)+".csv"
                 windsave_df.to_csv(os.path.join(spath,nsave))
+                del(windsave_df)
         return 0 
           
     train_loop(data_batches,id_variables,n_epochs=n_epochs)
@@ -1040,14 +1072,10 @@ from multiprocessing import Pool
 
 if __name__ == '__main__':
     
-    # blr_range=[0.5e-1,0.5e-2,0.5e-3,0.5e-4]
-    blr_range=np.array([0.5e-3,0.5e-4,0.5e-5])*1e2
-    ns_range=[-1]
-    # fit_arg_range=[False,True]
+    blr_range=[0.5,0.5e-1,0.5e-2,0.5e-3,0.5e-4,0.5e-5,0.5e-6,0.5e-7]
+    ns_range=[1]
     fit_arg_range=[True]
-    # blr_range=['scipy']
-    # ns_range=['all']
-    # fit_arg_range=[True,False]
+
     
     # rem=[[True, 'scipy', -1],
     #       [False, 'scipy', -1]]

@@ -187,14 +187,24 @@ def main_func(x):
     if log_name=="":
         log_name=str(datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S"))
         
+
+
     spath=os.path.join(os.getcwd(),"results",log_name)
     
+    import shutil
+    try:
+        shutil.rmtree(spath)
+    except:
+        pass
+
     os.makedirs(spath)
     
     with open(os.path.join(spath,'data.json'), 'w') as fp:
         json.dump(metap, fp)
     
     import pandas as pd
+    
+    
     def saver(name=None,save_path="/home/alex/Documents/identification_modele_hélice/results/",**kwargs):
         
         D={}
@@ -210,7 +220,7 @@ def main_func(x):
         with open(os.path.join(save_path,'%s.json'%(dname)), 'w') as fp:
             json.dump(D, fp)
     
-    
+        return None
     
     # %%   ####### SYMPY PROBLEM 
     
@@ -710,14 +720,16 @@ def main_func(x):
         used_jac=np.mean(jac_array,axis=0)
         print(" --- Propagate %s grad : "%(log_name))
         
-        datatoplot=np.c_[used_jac,[id_variables[k]*scalers[k] for k in id_variables.keys()]].T
-        toplot=pd.DataFrame(data=datatoplot,columns=id_variables.keys(),index=['J','value'])
+        #datatoplot=np.c_[used_jac,[id_variables[k]*scalers[k] for k in id_variables.keys()]].T
+        #toplot=pd.DataFrame(data=datatoplot,columns=id_variables.keys(),index=['J','value'])
         
     
-        print(toplot.transpose())
+        #print(toplot.transpose())
         
-        new_dic=copy.deepcopy(id_variables)
-        
+        new_dic={}
+        for k in id_variables:
+            new_dic[k]=id_variables[k]    
+            
         for i,key in enumerate(id_variables):
             new_dic[key]=np.clip(id_variables[key]-lr*used_jac[i],bounds[key][0],bounds[key][1])
             
@@ -749,32 +761,32 @@ def main_func(x):
         C=np.mean(used_err,axis=0)
         
         print(len(id_var),J.shape)
-        datatoplot=np.c_[J,[id_var[k]*scalers[k] for k in id_var.keys()]].T
-        toplot=pd.DataFrame(data=datatoplot,columns=id_var.keys(),index=['J','value'])
+        #datatoplot=np.c_[J,[id_var[k]*scalers[k] for k in id_var.keys()]].T
+        #toplot=pd.DataFrame(data=datatoplot,columns=id_var.keys(),index=['J','value'])
         print("\n %s------ Cost (in scipy minim): %f\n"%(log_name,C))
-        print(toplot.transpose())
+        #print(toplot.transpose())
         
-        n,k,val_sc_a,val_sc_v,total_sc_a,total_sc_v,t0=writtargs
+        n,k,val_sc_a,val_sc_v,total_sc_a,total_sc_v,t0,write_this_step=writtargs
 
         realvals={}
         for i in id_var.keys():
             realvals[i]=id_var[i]*scalers[i]
             
-
-        saver(name="epoch_%i_batch_%i_t_%f"%(n,k,time.time()-t0),save_path=spath,
-        id_variables=realvals,
-        train_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
-        train_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
-        val_sc_a=val_sc_a,
-        val_sc_v=val_sc_v,
-        total_sc_a=total_sc_a,
-        total_sc_v=total_sc_v)
+        if write_this_step:
+            saver(name="epoch_%i_batch_%i_t_%f"%(n,k,time.time()-t0),save_path=spath,
+            id_variables=realvals,
+            train_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
+            train_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
+            val_sc_a=val_sc_a,
+            val_sc_v=val_sc_v,
+            total_sc_a=total_sc_a,
+            total_sc_v=total_sc_v)
         
         return C,J
     
     # %% Train loop
     from scipy.optimize import minimize
-    
+    import gc 
     def train_loop(data_batches,id_var,n_epochs=n_epochs):
     
         id_variables=copy.deepcopy(id_var)
@@ -826,13 +838,17 @@ def main_func(x):
             
             
             for k,batch_ in enumerate(temp_shuffled_batches[:N_train_batches]):
+                
+                save_indexes=np.arange(0,N_train_batches,N_train_batches//10)
+                write_this_step=(k in save_indexes) or ns=='all'
+                
                 if fit_strategy not in ('custom_gradient','scipy'):
                     print(" ERROR WRONG FIT STRATEGY !!!!")
                     break
                                         
                 if fit_strategy=="custom_gradient":
                 
-                    acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
+                    __,__,__,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
                     id_variables=propagate_gradient(jac_error_v if fit_on_v else jac_error_a,id_variables)
                     
                     train_sc_a+=np.sqrt(np.mean(square_error_a,axis=0))
@@ -848,7 +864,7 @@ def main_func(x):
                     for i in id_variables.keys():
                         realvals[i]=id_variables[i]*scalers[i]
 
-                    if ns!=-1 or k//100==0 :
+                    if write_this_step:
 
                         saver(name="epoch_%i_batch_%i"%(n,k),save_path=spath,
                           id_variables=realvals,
@@ -858,13 +874,14 @@ def main_func(x):
                           val_sc_v=val_sc_v,
                           total_sc_a=total_sc_a,
                           total_sc_v=total_sc_v)
+                        gc.collect()
                     
                 elif fit_strategy=="scipy":
                     
                     X_start=dict_to_X(id_variables)
                     bnds=[bounds[i] for i in id_variables]
                     
-                    writtargs=[n,k,val_sc_a,val_sc_v,total_sc_a,total_sc_v,time.time()]
+                    writtargs=[n,k,val_sc_a,val_sc_v,total_sc_a,total_sc_v,time.time(),write_this_step]
                        
                     sol_scipy=minimize(fun_cost_scipy,
                                        X_start,
@@ -881,6 +898,7 @@ def main_func(x):
                                                                                                       k,len(temp_shuffled_batches),
                                                                                                       current_score_label,
                                                                                                       current_score))  
+                    gc.collect() if write_this_step else None
                     
             train_sc_a/=N_train_batches
             train_sc_v/=N_train_batches
@@ -901,19 +919,20 @@ def main_func(x):
                     for i in id_variables.keys():
                         realvals[i]=id_variables[i]*scalers[i]
                         
-                    saver(name="epoch_%i_batch_%i"%(n,k+N_train_batches),save_path=spath,
-                      id_variables=realvals,
-                      train_sc_a=train_sc_a,
-                      train_sc_v=train_sc_v,
-                      val_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
-                      val_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
-                      total_sc_a=total_sc_a,
-                      total_sc_v=total_sc_v)
+                    if write_this_step:
+                        saver(name="epoch_%i_batch_%i"%(n,k+N_train_batches),save_path=spath,
+                          id_variables=realvals,
+                          train_sc_a=train_sc_a,
+                          train_sc_v=train_sc_v,
+                          val_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
+                          val_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
+                          total_sc_a=total_sc_a,
+                          total_sc_v=total_sc_v)
 
 
             
-            val_sc_a/=N_val_batches
-            val_sc_v/=N_val_batches
+            val_sc_a=val_sc_a/N_val_batches if N_val_batches!=0 else val_sc_a
+            val_sc_v=val_sc_v/N_val_batches if N_val_batches!=0 else val_sc_v
     
             acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(data_prepared,id_variables,scalers)
             total_sc_a=np.sqrt(np.mean(square_error_a,axis=0))
@@ -954,8 +973,8 @@ if __name__ == '__main__':
     # ns_range=['all',25,5,-1]
     # fit_arg_range=[True,False]
     
-    blr_range=['scipy']
-    ns_range=['all']
+    blr_range=[0.5e-1,0.5e-2,0.5e-3,0.5e-4,0.5e-5]
+    ns_range=[1]
     fit_arg_range=[True,False]
     
     # rem=[[True, 5e-3, 25],
