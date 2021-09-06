@@ -528,19 +528,18 @@ def main_func(x):
     
     
     # on choisit tmin et tmax selon quel log on utilise
-    
-    if "vol1_ext_alcore" in log_path:
-        tmin,tmax=(41,265) 
-    if "vol2_ext_alcore" in log_path:
-        tmin,tmax=(10,140) 
     if "vol12" in log_path:
         tmin,tmax=(-1,1e10) 
+    elif "vol1" in log_path:
+        tmin,tmax=(41,265) 
+    elif "vol2" in log_path:
+        tmin,tmax=(10,140) 
+
         
     prep_data=prep_data[prep_data['t']>tmin]
     prep_data=prep_data[prep_data['t']<tmax]
     prep_data=prep_data.reset_index()
     
-    # aucune idée de pourquoi j'ai fait ça 
     
     for i in range(3):
         prep_data['speed_pred[%i]'%(i)]=np.r_[prep_data['speed[%i]'%(i)].values[1:len(prep_data)],0]
@@ -766,7 +765,7 @@ def main_func(x):
         jac_error_v=np.zeros((len(batch),len(id_variables)))
         
         for i in batch.index:
-            # print("batchindex:",batch.index)
+
             print("\r Pred on batch %i / %i "%(i,max(batch.index)), end='', flush=True)
     
             speed_pred_prev=speed_pred[i-1] if i>min(batch.index) else (batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i])
@@ -784,7 +783,7 @@ def main_func(x):
             jac_error_v[i]=Y[14+len(id_variables):14+2*len(id_variables)].reshape(len(id_variables),)
             
     
-        # print("TOTAL TIME:",time.time()-t0)
+
         return acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v
     
 
@@ -837,12 +836,6 @@ def main_func(x):
 
         print(" --- Propagate %s grad : "%(log_name))
         
-        #datatoplot=np.c_[used_jac,[id_variables[k]*scalers[k] for k in id_variables.keys()]].T
-        #toplot=pd.DataFrame(data=datatoplot,columns=id_variables.keys(),index=['J','value'])
-        
-    
-        #print(toplot.transpose())
-        #del(toplot)
 
         J=np.zeros(len(X))
         index_j=0
@@ -944,6 +937,8 @@ def main_func(x):
               "total_sc_v=",total_sc_v,)
         print('###################################\n')
     
+    
+        "on repasse les valeurs dans leur valeur physique "
         realvals={}
         for i in id_variables.keys():
             realvals[i]=prepare_dict(id_variables,0)[i]*scalers[i]
@@ -964,6 +959,11 @@ def main_func(x):
         for n in range(n_epochs):
             "begin epoch"
             
+            
+            "train score correspond au score sur le dataset de d'entrainement"
+            "val score correspond au score sur le dataset de validation "
+            "total score correspond au score sur la totalité du dataset"
+            
             train_sc_a,train_sc_v=0,0
             val_sc_a,val_sc_v=0,0
             total_sc_a,total_sc_v=0,0
@@ -974,7 +974,15 @@ def main_func(x):
             
             for k,batch_ in enumerate(temp_shuffled_batches[:N_train_batches]):
                 
+                "si les batches sont tout petits, on génère beaucoup de résultats"
+                "on ne veut pas tous els sauvegarder: ça prend de la place et "
+                " ça peut provoquer des fuites de RAM "
+                
+                "on se donne donc des indexes de sauvegarde; en l'occurrence"
+                " tous les 20% du dataset "
+                
                 save_indexes=np.arange(0,N_train_batches,max(N_train_batches//5,1))
+                
                 write_this_step=(k in save_indexes) or ns=='all'
                 
                 if fit_strategy not in ('custom_gradient','scipy'):
@@ -1048,11 +1056,16 @@ def main_func(x):
                         
                         
                 elif fit_strategy=="scipy":
+                    
                     "si on a choisi d'utiliser scipy pour minimiser"
                     
                     temp_id_variables={}
                     for i in id_variables:
                         temp_id_variables[i]=id_variables[i]
+                        
+                    "il faut s'y prendre comme ceci pour copier un dict,"
+                    "faire dict_B=dict_A fait que si on modifie B on modifie A"
+                    
 
                     if wind_signal:
                         for key_ in ('vw_i','vw_j'):
@@ -1068,7 +1081,7 @@ def main_func(x):
                     sol_scipy=minimize(fun_cost_scipy,
                                        X_start,
                                        args=(batch_,scalers,writtargs),
-                                        method="L-BFGS-B",
+                                        method="L-BFGS-B" if ns==-1 else 'SLSQP',
                                         jac=True)#,options={"maxiter":1})
                     
                     new_id_variables=X_to_dict(sol_scipy["x"],base_dict=temp_id_variables)
@@ -1146,6 +1159,7 @@ def main_func(x):
                             nsave="WINDSIG_epoch_%i_batch_%i"%(n,k)+".csv"
                             windsave_df.to_csv(os.path.join(spath,nsave))
                         gc.collect()
+                        
             if N_val_batches!=0:
                 val_sc_a/=N_val_batches
                 val_sc_v/=N_val_batches
@@ -1192,19 +1206,26 @@ from multiprocessing import Pool
 
 if __name__ == '__main__':
     
-    blr_range=[10**i for i in range(0,-5,-1)]
+    blr_range=[0.5*10**i for i in range(0,-5,-1)]
 
     
     ns_range=[-1]
 
-    fit_arg_range=[False,True]
+    fit_arg_range=[False]
 
-    
-    
-    
     x_r=[[i,j,k] for j in blr_range for i in  fit_arg_range  for k in ns_range ]
 
+    x_r.append([False, 'scipy', -1])
+
+    # x_r.append([False, 'scipy', 1])
+    # x_r.append([True, 'scipy',  1])
     
+    # x_r.append([False, 'scipy', 5])
+    # x_r.append([True, 'scipy',  5])
+    
+    x_r.append([False, 'scipy', 'all'])
+    x_r.append([True, 'scipy',  'all'])
+
     
     print(x_r,len(x_r))
 

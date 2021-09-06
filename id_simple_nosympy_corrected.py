@@ -24,7 +24,7 @@ b10=14.44
 print("LOADING DATA...")
 import pandas as pd
 
-log_path="./logs/vol2_ext_alcore/log_real_processed.csv"
+
 log_path="./logs/vol12/log_real_processed.csv"
 
 raw_data=pd.read_csv(log_path)
@@ -36,12 +36,12 @@ prep_data=raw_data.drop(columns=[i for i in raw_data.keys() if (("forces" in i )
 prep_data=prep_data.drop(columns=[i for i in raw_data.keys() if (("level" in i ) or ('Unnamed' in i) or ("index" in i)) ])
 # print(prep_data)
 
-if "vol1_ext_alcore" in log_path:
-    tmin,tmax=(41,265) 
-if "vol2_ext_alcore" in log_path:
-    tmin,tmax=(10,140) 
 if "vol12" in log_path:
     tmin,tmax=(-1,1e10) 
+elif "vol1" in log_path:
+    tmin,tmax=(41,265) 
+elif "vol2" in log_path:
+    tmin,tmax=(10,140) 
     
 prep_data=prep_data[prep_data['t']>tmin]
 prep_data=prep_data[prep_data['t']<tmax]

@@ -36,7 +36,7 @@ def plot_opti(opti_to_plot):
     "listing all json files except data.json which has the metaparams"
     json_list=[]
     
-    for file in os.listdir(dirpath):
+    for file in [i for i in os.listdir(dirpath) if "WIND" not in i]:
         json_list.append(file) if file!="data.json" else None
         
     if len(json_list)==0:
@@ -83,10 +83,13 @@ def plot_opti(opti_to_plot):
         data_dict[k]=[]
         
     for file in json_list:
-        with open(os.path.join(dirpath,file),"r") as f:
-            json_data=json.load(f)
-            for k in keys_:
-                data_dict[k]=data_dict[k]+[json_data[k]] if isinstance(json_data[k],(int,float)) else data_dict[k]+json_data[k] 
+        try :
+            with open(os.path.join(dirpath,file),"r") as f:
+                json_data=json.load(f)
+                for k in keys_:
+                    data_dict[k]=data_dict[k]+[json_data[k]] if isinstance(json_data[k],(int,float)) else data_dict[k]+json_data[k] 
+        except:
+            print("Failed: ",file)
     # print(data_dict)
     
     N_sp=len(keys_)
@@ -192,5 +195,5 @@ def plot_opti(opti_to_plot):
 
 list_optis=os.listdir("./results/")
 # list_optis=['fit_v_True_lr_0.001000_ns_-1.000000']
-[plot_opti(i) for i in list_optis]
+[plot_opti(i) for i in list_optis if "ignore" not in i]
 # plot_opti('10ep_fit_v_False_lr_scipy_ns_2')
