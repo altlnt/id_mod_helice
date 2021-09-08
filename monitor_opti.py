@@ -13,7 +13,7 @@ import os
 import json
 
 
-base_path=os.path.join(os.getcwd(),"results")
+base_path=os.path.join(os.getcwd(),"results_tests")
 
 # %%  PLOT ONE OPTI
 opti_to_plot="5s_struc_all"
@@ -193,7 +193,7 @@ def plot_opti(opti_to_plot):
 
 # %%  PLOT ALL optis
 
-list_optis=os.listdir("./results/")
+list_optis=os.listdir(base_path)
 # list_optis=['fit_v_True_lr_0.001000_ns_-1.000000']
 [plot_opti(i) for i in list_optis if "ignore" not in i]
 # plot_opti('10ep_fit_v_False_lr_scipy_ns_2')

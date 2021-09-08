@@ -1211,20 +1211,20 @@ if __name__ == '__main__':
     
     ns_range=[-1]
 
-    fit_arg_range=[False]
+    fit_arg_range=[True]
 
     x_r=[[i,j,k] for j in blr_range for i in  fit_arg_range  for k in ns_range ]
 
-    x_r.append([False, 'scipy', -1])
+    # x_r.append([False, 'scipy', -1])
 
-    # x_r.append([False, 'scipy', 1])
-    # x_r.append([True, 'scipy',  1])
+    x_r.append([False, 'scipy', 1])
+    x_r.append([True, 'scipy',  1])
     
     # x_r.append([False, 'scipy', 5])
     # x_r.append([True, 'scipy',  5])
     
-    x_r.append([False, 'scipy', 'all'])
-    x_r.append([True, 'scipy',  'all'])
+    # x_r.append([False, 'scipy', 'all'])
+    # x_r.append([True, 'scipy',  'all'])
 
     
     print(x_r,len(x_r))
