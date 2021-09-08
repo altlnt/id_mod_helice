@@ -274,6 +274,8 @@ class Log():
         dic_data['PWM_motor[4]']=f.act_4.values 
         dic_data['PWM_motor[5]']=f.act_5.values 
         dic_data['PWM_motor[6]']=f.act_6.values        
+        dic_data['PWM_motor[7]']=f.act_7.values        
+        dic_data['PWM_motor[8]']=f.act_8.values        
 
         dic_data['takeoff']=[1 if f.z.values[i]<-2 else 0 for i in range(len(f.t))]
 
