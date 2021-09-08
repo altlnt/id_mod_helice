@@ -39,7 +39,7 @@ def main_func(x):
     nsecs=ns
     # nsecs désigne la taille du batch en secondes
     
-    model_motor_dynamics=True #si true, on fait intervernir kT
+
 
     n_epochs=20 #le nombre d'epochs
     
@@ -49,34 +49,12 @@ def main_func(x):
 
     #                   CI DESSOUS LES PARAMETRES PROPRES AU MODELE
     
-    with_ct3=False
-    vanilla_force_model=False
-    
-    structural_relation_idc1=False
-    structural_relation_idc2=False
-    
-    if vanilla_force_model and (structural_relation_idc1 or structural_relation_idc2):
-        print("INVALID :")
-        print("vanilla force model and structural_relation cannot be true at the same time")
-        sys.exit()
-        
-    if structural_relation_idc1 and structural_relation_idc2:
-        print("INVALID :")
-        print("structural_relation_idc1 and structural_relation_idc2 cannot be true at the same time")
-        sys.exit()
-    
-    approx_x_plus_y=False
-    di_equal_dj=False
+
 
     #                  Ci dessous, on décide quels paramètres on souhaite identifier
     id_mass=False
-    id_blade_coeffs=True
-    id_c3=with_ct3
-    id_blade_geom_coeffs=False
-    id_body_liftdrag_coeffs=True
     id_wind=not assume_nul_wind
-    id_time_const=model_motor_dynamics
-    
+
     
     
     train_proportion=0.8 #proportion data train vs validation
@@ -98,21 +76,19 @@ def main_func(x):
     pwmmax=1950.0
     U_batt=16.8
     
-    b10=14.44
-    
-    c10=0.0139055
-    c20=0.0386786
-    c30=0.0
-    ch10=0.0282942
-    ch20=0.1
-    di0=0.806527
-    dj0=0.632052
-    dk0=1.59086
-    
     vwi0=0.0
     vwj0=0.0
     
-    kt0=5.0
+    
+    cd0sa_0 = 0.010
+    cd0fp_0 = 0.010
+    cd1sa_0 = 4.55 
+    cl1sa_0 = 5 
+    cd1fp_0 = 2.5 
+    coeff_drag_shift_0= 0.5 
+    coeff_lift_shift_0= 0.05 
+    coeff_lift_gain_0= 2.5
+    
     
     physical_params=[mass,
     Area,
@@ -122,18 +98,16 @@ def main_func(x):
     pwmmin,
     pwmmax,
     U_batt,
-    b10,
-    c10,
-    c20,
-    c30,
-    ch10,
-    ch20,
-    di0,
-    dj0,
-    dk0,
+    cd0sa_0,
+    cd0fp_0,
+    cd1sa_0,
+    cl1sa_0 ,
+    cd1fp_0,
+    coeff_drag_shift_0,
+    coeff_lift_shift_0,
+    coeff_lift_gain_0,
     vwi0,
-    vwj0,
-    kt0]
+    vwj0]
     
     
     # Bounds and scaling factors
@@ -141,50 +115,31 @@ def main_func(x):
     bounds['m']=(0,np.inf)
     bounds['A']=(0,np.inf)
     bounds['r']=(0,np.inf)
-    bounds['c1']=(0,np.inf)
-    bounds['c2']=(-np.inf,np.inf)
-    bounds['c3']=(-np.inf,np.inf)
-    bounds['ch1']=(-np.inf,np.inf)
-    bounds['ch2']=(-np.inf,np.inf)
-    bounds['di']=(0,np.inf)
-    bounds['dj']=(0,np.inf)
-    bounds['dk']=(0,np.inf)
+    bounds['cd0sa']=(0,np.inf)
+    bounds['cd0fp']=(-np.inf,np.inf)
+    bounds['cd1sa']=(-np.inf,np.inf)
+    bounds['cl1sa']=(-np.inf,np.inf)
+    bounds['cd1fp']=(-np.inf,np.inf)
+    bounds['coeff_drag_shift']=(0,np.inf)
+    bounds['coeff_lift_shift']=(0,np.inf)
+    bounds['coeff_lift_gain']=(0,np.inf)
     bounds['vw_i']=(-15,15)
     bounds['vw_j']=(-15,15)
-    bounds['kt']=(0,np.inf)
     
     "scaler corresponds roughly to the power of ten of the parameter"
     "it does not have to though, it may be used to improve the grad descent"
     
     scalers={}
-    scalers['m']=1.0
-    scalers['A']=1.0
-    scalers['r']=1.0
-    scalers['c1']=1.0e-2
-    scalers['c2']=1.0e-1
-    scalers['c3']=1.0
-    scalers['ch1']=1e-2
-    scalers['ch2']=1e-1
-    scalers['di']=1.0
-    scalers['dj']=1.0
-    scalers['dk']=1.0
-    scalers['vw_i']=1.0
-    scalers['vw_j']=1.0
-    scalers['kt']=1.0e2
+    for i in bounds:
+        scalers[i]=1.0
     
     
     
-    metap={"model_motor_dynamics":model_motor_dynamics,
+    metap={
             "used_logged_v_in_model":used_logged_v_in_model,
-            "with_ct3":with_ct3,
-            "vanilla_force_model":vanilla_force_model,
-            "structural_relation_idc1":structural_relation_idc1,
-            "structural_relation_idc2":structural_relation_idc2,
             "fit_on_v":fit_on_v,
             "wind_signal":wind_signal,
             "assume_nul_wind":assume_nul_wind,
-            "approx_x_plus_y":approx_x_plus_y,
-            "di_equal_dj":di_equal_dj,
             "log_path":log_path,
             "base_lr":base_lr,
             "n_epochs":n_epochs,
@@ -205,7 +160,6 @@ def main_func(x):
     import os
     import json
     import datetime
-    import time
     
     #generating a new log name if none is provided
     if log_name=="":
@@ -528,6 +482,7 @@ def main_func(x):
     
     
     # on choisit tmin et tmax selon quel log on utilise
+    
     if "vol12" in log_path:
         tmin,tmax=(-1,1e10) 
     elif "vol1" in log_path:
@@ -587,45 +542,26 @@ def main_func(x):
                       "A":Area,
                       "r":r0,
                       "rho":rho0,
-                      "b1":b10,
-                      "c1":c10,
-                      "c2":c20,
-                      "c3":c30,
-                      "ch1":ch10,
-                      "ch2":ch20,
-                      "di":di0,
-                      "dj":dj0,
-                      "dk":dk0,
+                    'cd0sa':cd0sa_0,
+                    'cd0fp':cd0fp_0,
+                    'cd1sa':cd1sa_0,
+                    'cl1sa':cl1sa_0,
+                    'cd1fp':cd1fp_0,
+                    'coeff_drag_shift':coeff_drag_shift_0,
+                    'coeff_lift_shift':coeff_lift_shift_0,
+                    'coeff_lift_gain':coeff_lift_gain_0,
                       "vw_i":vwi0,
-                      "vw_j":vwj0,
-                      "kt":kt0}
+                      "vw_j":vwj0}
     id_variables={}
+    for key_ in ('cd0sa','cd0fp',
+                 'cd1sa','cl1sa','cd1fp',
+                 'coeff_drag_shift','coeff_lift_shift',
+                 'coeff_lift_gain'):
+        id_variables[key_]=non_id_variables[key_]
     
     if id_mass:
         id_variables['m']=mass  
         
-    if id_blade_coeffs:
-        if vanilla_force_model:
-            id_variables['c1']=c10
-        if not structural_relation_idc2:
-            id_variables['c1']=c10
-        if not structural_relation_idc1 and not vanilla_force_model:
-            id_variables['c2']=c20
-        if id_c3:
-            id_variables['c3']=c30
-        if not vanilla_force_model:
-            id_variables['ch1']=ch10
-            id_variables['ch2']=ch20
-      
-    if id_blade_geom_coeffs:
-        id_variables['A']=Area
-        id_variables['r']=r0
-    
-    if id_body_liftdrag_coeffs:
-        id_variables['di']=di0
-        if not di_equal_dj:
-            id_variables['dj']=dj0
-        id_variables['dk']=dk0
         
     if id_wind:
         id_variables['vw_i']=vwi0
@@ -634,8 +570,6 @@ def main_func(x):
             id_variables['vw_i']=vwi0*np.zeros(len(data_prepared))
             id_variables['vw_j']=vwj0*np.zeros(len(data_prepared)) 
             
-    if id_time_const:
-        id_variables['kt']=kt0
     
     "cleaning non_id_variables to avoid having variables in both dicts"
     rem=[]
@@ -659,7 +593,7 @@ def main_func(x):
     import transforms3d as tf3d 
     import copy 
     
-    def arg_wrapping(batch,id_variables,scalers,data_index,speed_pred_previous,omegas_pred):
+    def arg_wrapping(batch,id_variables,scalers,data_index,speed_pred_previous):
         
         "cette fonction sert à fabriquer, à partir des inputs, l'argument que "
         "l'on enverra en input à la fonction lambdifiée de la partie sympy    "
@@ -703,6 +637,16 @@ def main_func(x):
         di=non_id_variables['di'] if 'di' in non_id_variables else id_variables['di']
         dj=non_id_variables['dj'] if 'dj' in non_id_variables else id_variables['dj']
         dk=non_id_variables['dk'] if 'dk' in non_id_variables else id_variables['dk']
+        
+        cd0sa=non_id_variables['cd0sa'] if 'cd0sa' in non_id_variables else id_variables['cd0sa']
+        cd0fp=non_id_variables['cd0fp'] if 'cd0fp' in non_id_variables else id_variables['cd0fp']
+        cd1sa=non_id_variables['cd1sa'] if 'cd1sa' in non_id_variables else id_variables['cd1sa'],
+        cl1sa=non_id_variables['cl1sa'] if 'cl1sa' in non_id_variables else id_variables['cl1sa']
+        cd1fp=non_id_variables['cd1fp'] if 'cd1fp' in non_id_variables else id_variables['cd1fp']
+        coeff_drag_shift=non_id_variables['coeff_drag_shift'] if 'coeff_drag_shift' in non_id_variables else id_variables['coeff_drag_shift']
+        coeff_lift_shift=non_id_variables['coeff_lift_shift'] if 'coeff_lift_shift' in non_id_variables else id_variables['coeff_lift_shift']
+        coeff_lift_gain=non_id_variables['coeff_lift_gain'] if 'coeff_lift_gain' in non_id_variables else id_variables['coeff_lift_gain']
+        
         rho=non_id_variables['rho'] if 'rho' in non_id_variables else id_variables['rho']
         A=non_id_variables['A'] if 'A' in non_id_variables else id_variables['A']
         r=non_id_variables['r'] if 'r' in non_id_variables else id_variables['r']
@@ -710,17 +654,8 @@ def main_func(x):
         R=tf3d.quaternions.quat2mat(np.array([batch['q[%i]'%(j)][i] for j in range(4)]))
         
         omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6=np.array([batch['omega_c[%i]'%(j)][i] for j in range(1,7,1)])
-        omega_1,omega_2,omega_3,omega_4,omega_5,omega_6=omegas_pred
+
                 
-        m_scale=scalers['m']
-        A_scale=scalers['A']
-        r_scale=scalers['r']
-        c1_scale,c2_scale,c3_scale=scalers['c1'],scalers['c2'],scalers['c3']
-        ch1_scale,ch2_scale=scalers['ch1'],scalers['ch2']
-        di_scale,dj_scale,dk_scale=scalers['di'],scalers['dj'],scalers['dk']
-        vw_i_scale,vw_j_scale=scalers['vw_i'],scalers['vw_j']
-        kt_scale=scalers['kt']
-        
         X=(m,A,r,rho,
         b1,
         c1,c2,c3,
