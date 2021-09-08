@@ -131,8 +131,8 @@ class Log():
         "not the same for sitl and real logs"
 
 
-        att=asarray([euler.mat2euler(quaternions.quat2mat(attitude.values[i,attoffset:attoffset+4])) for i in range(len(attitude))]).reshape(-1,3)
-        R=array([quaternions.quat2mat(attitude.values[i,attoffset:attoffset+4]) for i in range(len(attitude))]).reshape(-1,9)
+        att=asarray([euler.mat2euler(quaternions.quat2mat(attitude.values[i,4:8])) for i in range(len(attitude))]).reshape(-1,3)
+        R=array([quaternions.quat2mat(attitude.values[i,4:8]) for i in range(len(attitude))]).reshape(-1,9)
 
 
 
