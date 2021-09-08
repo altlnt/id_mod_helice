@@ -213,6 +213,9 @@ def main_func(x):
     
     def Generate_equation(used_logged_v_in_model=used_logged_v_in_model):
           vlog_i,vlog_j,vlog_k=symbols("vlog_i,vlog_j,vlog_k",real=True)
+          v_log=Matrix([[vlog_i],
+                        [vlog_j],
+                        [vlog_k]])
           vpred_i,vpred_j,vpred_k=symbols("vpred_i,vpred_j,vpred_k",real=True)    
           v_i,v_j,v_k=(vlog_i,vlog_j,vlog_k) if used_logged_v_in_model else (vpred_i,vpred_j,vpred_k)
           v=Matrix([[v_i],
@@ -280,7 +283,7 @@ def main_func(x):
                   else: alpha=alpha+np.pi         
               return alpha
       
-        ##################################################### génération des équations pour Cd et Cl (utiliser pour générer les équations symbolique pour chaque surface portantes) ####################################################
+          ##################################################### génération des équations pour Cd et Cl (utiliser pour générer les équations symbolique pour chaque surface portantes) ####################################################
           def compute_cl_cd(a, a_0, a_s, d_0, d_s, cl1sa, cd1fp, k0, k1, k2, cd0fp, cd0sa, cd1sa):
           
               CL_sa = 1/2 * cl1sa * sin(2*(a + (k1*d_0) + a_0))
@@ -399,12 +402,28 @@ def main_func(x):
           
           t35=time.time()
           print("Elapsed : %f s , Prev step time: %f s \\ Solving Dynamics ..."%(t35-t0,t35-t3))
-
-          theta = OrderedDict(sorted(id_variables_sym.items()))
+            
+          theta=[]
+          for i in (CD_0_sa,
+                    CD_0_fp,
+                    CD_1_sa,
+                    CL_1_sa,
+                    CD_1_fp,
+                    k_0,
+                    k_1,
+                    k_2):
+              theta.append(i)
+            
+          if id_wind:
+              theta.append(Vw1)
+              theta.append(Vw2)
+              theta.append(Vw3)
+              
+          theta = Matrix([theta])
           
           
-          Grad_Force_Aero_complete = Matrix([(Effort_Aero_complete[0]).jacobian([i for i in theta.values()])])
-          Grad_Torque_Aero_complete = Matrix([(Effort_Aero_complete[1]).jacobian([i for i in theta.values()])])
+          Grad_Force_Aero_complete = Effort_Aero_complete[0].jacobian(theta)
+          Grad_Torque_Aero_complete = Effort_Aero_complete[1].jacobian(theta)
           Grad_Effort_Aero_complete = [Grad_Force_Aero_complete,Grad_Torque_Aero_complete]
       
           ########## Equation du gradient utilisé en simulation ####################
@@ -424,15 +443,13 @@ def main_func(x):
           
           w1,w2,w3,w4,w5,w0 = symbols('w_1,w_2,w_3,w_4,w_5,w_0')
       
-          #Génération des équations finales pour la gradient du cout et des RMS error
+          #Génération des équations finales pour la gradient du csout et des RMS error
           forces = R@(Sum_F_wing_complete + Sum_F_rotor_complete) + m*g
           # torque = R@(Sum_T_wing_complete + Sum_T_rotor_complete)
           
-          new_acc = (forces/m)
+          new_acc = forces/m
           new_v = v + new_acc*dt
           
-          vlog_i,vlog_j,vlog_k=symbols("vlog_i,vlog_j,vlog_k",real=True)
-          v_log=Matrix([[vlog_i],[vlog_j],[vlog_k]])         
           
           alog_i,alog_j,alog_k=symbols("alog_i,alog_j,alog_k",real=True)
           alog=Matrix([[alog_i],[alog_j],[alog_k]])
@@ -446,14 +463,14 @@ def main_func(x):
           sqerr_a=Matrix([1.0/cost_scaler_a*(err_a[0,0]**2+err_a[1,0]**2+err_a[2,0]**2)])
           sqerr_v=Matrix([1.0/cost_scaler_v*(err_v[0,0]**2+err_v[1,0]**2+err_v[2,0]**2)])
           
-          Ja=sqerr_a.jacobian([i for i in theta.values()])
-          Jv=sqerr_v.jacobian([i for i in theta.values()])
+          Ja=sqerr_a.jacobian(theta)
+          Jv=sqerr_v.jacobian(theta)
           
           Y=Matrix([new_acc,new_v,sqerr_a,sqerr_v,Ja.T,Jv.T])
           
           X =(alog,v_log,dt, Aire_list, Omega, R, v_B, v_W, cp_list, alpha_list, alpha0_list, alpha_s, delta0_list, delta_s, \
               CL_1_sa, CD_1_fp, k_0, k_1, k_2, CD_0_fp, CD_0_sa, CD_1_sa, C_t, C_q, C_h, omega_rotor, \
-                  g, m, w0,w1,w2,w3,w4,w5)
+                  g, m)
           
           
           model_func=lambdify(X,Y, modules='numpy')
@@ -655,16 +672,6 @@ def main_func(x):
             vw_i,vw_j=vw_i[i],vw_j[i]
         
         
-        kt=non_id_variables['kt'] if 'kt' in non_id_variables else id_variables['kt']
-        b1=non_id_variables['b1'] if 'b1' in non_id_variables else id_variables['b1']
-        c1=non_id_variables['c1'] if 'c1' in non_id_variables else id_variables['c1']
-        c2=non_id_variables['c2'] if 'c2' in non_id_variables else id_variables['c2']
-        c3=non_id_variables['c3'] if 'c3' in non_id_variables else id_variables['c3']
-        ch1=non_id_variables['ch1'] if 'ch1' in non_id_variables else id_variables['ch1']
-        ch2=non_id_variables['ch2'] if 'ch2' in non_id_variables else id_variables['ch2']
-        di=non_id_variables['di'] if 'di' in non_id_variables else id_variables['di']
-        dj=non_id_variables['dj'] if 'dj' in non_id_variables else id_variables['dj']
-        dk=non_id_variables['dk'] if 'dk' in non_id_variables else id_variables['dk']
         
         cd0sa=non_id_variables['cd0sa'] if 'cd0sa' in non_id_variables else id_variables['cd0sa']
         cd0fp=non_id_variables['cd0fp'] if 'cd0fp' in non_id_variables else id_variables['cd0fp']
