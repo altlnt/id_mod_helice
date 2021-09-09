@@ -232,12 +232,12 @@ def main_func(x):
     
     def Rotation(R,angle):
         c, s = np.cos(angle*np.pi/180), np.sin(angle*np.pi/180)
-        r = np.array(( (1,0, 0), (0,c, s),(0,-s, c)) , dtype=np.float)
+        r = np.array([[1,0, 0], [0,c, s],[0,-s, c]] , dtype=np.float)
         return R @ r
     #CI DESSOUS : on spécifie quelles variables sont les variables d'identif
    
-    model_func = dill.load(open('model_func_'+str(used_logged_v_in_model),'rb'))[0]
-    function_moteur_physique=  dill.load(open('model_func_'+str(used_logged_v_in_model),'rb'))[1]
+    model_func = dill.load(open('./.Funcs/model_func_'+str(used_logged_v_in_model),'rb'))[0]
+    function_moteur_physique=  dill.load(open('./.Funcs/model_func_'+str(used_logged_v_in_model),'rb'))[1]
     # CI DESSOUS : on spécifie quelles variables sont les variables d'identif
     
     t7=time.time()
@@ -435,7 +435,7 @@ def main_func(x):
         v_pred=np.array([[vpred_i],
                        [vpred_j],
                        [vpred_k]])
-        
+
         alog_i,alog_j,alog_k=batch['acc_ned_grad[0]'][i],batch['acc_ned_grad[1]'][i],batch['acc_ned_grad[2]'][i]
         alog=np.array([[alog_i],
                        [alog_j],
@@ -459,7 +459,7 @@ def main_func(x):
         
         cd0sa=non_id_variables['cd0sa'] if 'cd0sa' in non_id_variables else id_variables['cd0sa']
         cd0fp=non_id_variables['cd0fp'] if 'cd0fp' in non_id_variables else id_variables['cd0fp']
-        cd1sa=non_id_variables['cd1sa'] if 'cd1sa' in non_id_variables else id_variables['cd1sa'],
+        cd1sa=non_id_variables['cd1sa'] if 'cd1sa' in non_id_variables else id_variables['cd1sa']
         cl1sa=non_id_variables['cl1sa'] if 'cl1sa' in non_id_variables else id_variables['cl1sa']
         cd1fp=non_id_variables['cd1fp'] if 'cd1fp' in non_id_variables else id_variables['cd1fp']
         coeff_drag_shift=non_id_variables['coeff_drag_shift'] if 'coeff_drag_shift' in non_id_variables else id_variables['coeff_drag_shift']
@@ -469,7 +469,7 @@ def main_func(x):
         R=tf3d.quaternions.quat2mat(np.array([batch['q[%i]'%(j)][i] for j in range(4)]))
         R_list =[R,R,Rotation(R,45),Rotation(R,-45),R]
 
-
+        
         "reverse mixing"
         pwm_null_angle=1527
         RW_delta=batch['PWM_motor[1]'][i]-pwm_null_angle
@@ -488,16 +488,16 @@ def main_func(x):
         omega_rotor = batch['omega_c[5]'][i]                    ## Vitesse de rotation des helices (supposé les mêmes pour les deux moteurs)
         alpha_list=[0,0,0,0,0]
         for p, cp in enumerate(cp_list) :          # Cette boucle calcul les coefs aéro pour chaque surface 
-            VelinLDPlane   = function_moteur_physique[0](Omega, cp, v_log.flatten(), v_W, R_list[p].flatten())
-            dragDirection  = function_moteur_physique[1](Omega, cp, v_log.flatten(), v_W, R_list[p].flatten())
-            liftDirection  = function_moteur_physique[2](Omega, cp, v_log.flatten(), v_W, R_list[p].flatten())
-            alpha_list[p] = function_moteur_physique[3](dragDirection, liftDirection, np.array([[1],[0],[0]]), VelinLDPlane)
+            VelinLDPlane   = function_moteur_physique[0](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
+            dragDirection  = function_moteur_physique[1](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
+            liftDirection  = function_moteur_physique[2](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
+            alpha_list[p] = function_moteur_physique[3](dragDirection, liftDirection, np.array([[1],[0],[0]]).flatten(), VelinLDPlane)
         
-        
-        X=(alog,v_log,dt, Aire_list, Omega, R.flatten(), v_pred, v_W, cp_list, alpha_list, alpha_0, alpha_s, delta0_list, delta_s, \
-                                cl1sa, cd1fp, coeff_drag_shift, coeff_lift_shift, coeff_lift_gain, cd0fp, cd0sa, cd1sa, C_t, C_q, C_h, omega_rotor, \
-                                  g, m)
-        
+       
+        X=(alog.flatten(),v_log.flatten(),dt, Aire_list, Omega.flatten(), R.flatten(), v_pred.flatten(), v_W.flatten(), cp_list, alpha_list, alpha_0, \
+           alpha_s, delta0_list.flatten(), delta_s, cl1sa, cd1fp, coeff_drag_shift, coeff_lift_shift, coeff_lift_gain,\
+               cd0fp, cd0sa, cd1sa, C_t, C_q, C_h, omega_rotor, g.flatten(), m)
+
         return X
     
     
@@ -530,9 +530,9 @@ def main_func(x):
             speed_pred_prev=speed_pred[i-1] if i>min(batch.index) else (batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i])
 
             X=arg_wrapping(batch,id_variables,scalers,i,speed_pred_prev)
-            print(X)
+
             Y=model_func(*X)
-    
+            print(Y)
             acc_pred[i]=Y[:3].reshape(3,)
             speed_pred[i]=Y[3:6].reshape(3,)
             square_error_a[i]=Y[6:7].reshape(1,)
@@ -542,7 +542,7 @@ def main_func(x):
             
     
 
-        return acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v
+        return acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v
     
 
     
