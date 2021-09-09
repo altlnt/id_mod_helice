@@ -13,8 +13,8 @@ import os
 "on utilise le multiprocessing pour tester plusieurs metaparamètres"
 "elle est appelée par le process"
 
-
 def main_func(x):
+    
     
     # récupération des arguments
     fit_arg,blr,ns=x[0],x[1],x[2]
@@ -230,7 +230,10 @@ def main_func(x):
     " la jacobienne de l'erreur quad sur l'acc et la vitesse "
         
     
-   
+    def Rotation(R,angle):
+        c, s = np.cos(angle*np.pi/180), np.sin(angle*np.pi/180)
+        r = np.array(( (1,0, 0), (0,c, s),(0,-s, c)) , dtype=np.float)
+        return R @ r
     #CI DESSOUS : on spécifie quelles variables sont les variables d'identif
    
     model_func = dill.load(open('model_func_'+str(used_logged_v_in_model),'rb'))[0]
@@ -425,8 +428,9 @@ def main_func(x):
         v_log = np.array([vlog_i],
                        [vlog_j],
                        [vlog_k])
+        
         vpred_i,vpred_j,vpred_k=speed_pred_previous 
-        v_B=np.array([vpred_i],
+        v_pred=np.array([vpred_i],
                        [vpred_j],
                        [vpred_k])
         
@@ -435,7 +439,7 @@ def main_func(x):
                        [alog_j],
                        [alog_k])
         
-        vnext_i,vnext_j,vnext_k=batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i]
+        # vnext_i,vnext_j,vnext_k=batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i]
         
         m=non_id_variables['m'] if 'm' in non_id_variables else id_variables['m']
         
@@ -449,7 +453,7 @@ def main_func(x):
                      [vw_j], 
                      [vwk0])
         
-        Omega=np.eye(3)
+        Omega=np.zeros(3)
         
         cd0sa=non_id_variables['cd0sa'] if 'cd0sa' in non_id_variables else id_variables['cd0sa']
         cd0fp=non_id_variables['cd0fp'] if 'cd0fp' in non_id_variables else id_variables['cd0fp']
@@ -460,12 +464,8 @@ def main_func(x):
         coeff_lift_shift=non_id_variables['coeff_lift_shift'] if 'coeff_lift_shift' in non_id_variables else id_variables['coeff_lift_shift']
         coeff_lift_gain=non_id_variables['coeff_lift_gain'] if 'coeff_lift_gain' in non_id_variables else id_variables['coeff_lift_gain']
         
-        rho=non_id_variables['rho'] if 'rho' in non_id_variables else id_variables['rho']
-        A=non_id_variables['A'] if 'A' in non_id_variables else id_variables['A']
-        r=non_id_variables['r'] if 'r' in non_id_variables else id_variables['r']
-        
         R=tf3d.quaternions.quat2mat(np.array([batch['q[%i]'%(j)][i] for j in range(4)]))
-        R_list =[R,R,R,R,R]
+        R_list =[R,R,Rotation(R,45),Rotation(R,-45),R]
         omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6=np.array([batch['omega_c[%i]'%(j)][i] for j in range(1,7,1)])
 
         delta0_list=np.array([0,0,0,0,0])     ## Commande entre -15:15 pour les 4 premier terme, le dernier terme vaut 0 (pour l'homogéinité des longueur)
@@ -478,7 +478,7 @@ def main_func(x):
             alpha_list[p] = function_moteur_physique[3](dragDirection, liftDirection, np.array([1],[0],[0]), VelinLDPlane)
         
         
-        X=(alog,v_log,dt, Aire_list, Omega, R, v_B, v_W, cp_list, alpha_list, alpha_0, alpha_s, delta0_list, delta_s, \
+        X=(alog,v_log,dt, Aire_list, Omega, R, v_pred, v_W, cp_list, alpha_list, alpha_0, alpha_s, delta0_list, delta_s, \
                                 cl1sa, cd1fp, coeff_drag_shift, coeff_lift_shift, coeff_lift_gain, cd0fp, cd0sa, cd1sa, C_t, C_q, C_h, omega_rotor, \
                                   g, m)
         
