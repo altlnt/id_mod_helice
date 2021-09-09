@@ -516,7 +516,7 @@ def main_func(x):
         
         acc_pred=np.zeros((len(batch),3))
         speed_pred=np.zeros((len(batch),3))
-        omegas=np.zeros((len(batch),6))    
+
             
         square_error_a=np.zeros((len(batch),1))    
         square_error_v=np.zeros((len(batch),1))    
