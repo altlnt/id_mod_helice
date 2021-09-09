@@ -49,9 +49,9 @@ class Log():
 
 
         path=self.ulg_path
-        if not self.log_name.replace('.ulg','') in os.listdir(os.getcwd()):
+        if not (self.log_name.replace('.ulg','') in os.listdir(os.getcwd())):
             print(self.log_name)
-            os.mkdir(path)
+            os.makedirs(path)
             shutil.move(os.getcwd()+'/'+self.log_name, path+'/'+self.log_name)
 
         print("Moving to...")
@@ -288,7 +288,7 @@ class Log():
                     spamwriter.writerow(row)
 
 
-logs='log_17_2019-7-26-10-42-40'
+log=[i for i in os.listdir(os.getcwd()) if "ulg" in i][0][:-4]
 
 l=Log(ulg_path=os.path.join(os.getcwd(),log),
 csv_path=os.path.join(os.getcwd(),log,"donnees_brut"), 
