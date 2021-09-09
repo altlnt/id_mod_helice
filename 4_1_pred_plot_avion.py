@@ -20,7 +20,7 @@ fit_strategy="scipy" if  blr=="scipy" else "custom_gradient"
 # est un paramètre d'optimisation
 # sinon, le vent est considéré comme une constante
 
-wind_signal=True
+wind_signal=False
 assume_nul_wind=False # if true, le signal de vent constant vaut zéro
 nsecs=ns
 # nsecs désigne la taille du batch en secondes
@@ -50,9 +50,7 @@ train_proportion=1.0 #proportion data train vs validation
 
 # Paramètres utilitaires
 
-mass=369 #batterie
-mass+=1640-114 #corps-carton
-mass/=1e3
+mass=8.5
 g=np.array([0,0,9.81])
 
 Aire_1,Aire_2,Aire_3,Aire_4,Aire_5 =    0.62*0.262* 1.292 * 0.5,\
@@ -107,7 +105,7 @@ C_h = 1e-4
 # coeff_drag_shift_0= 0*0.5 
 # coeff_lift_shift_0= 0*0.05 
 # coeff_lift_gain_0= 0*2.5
-# C_t = 0*1.1e-4
+# C_t = 1.1e-4
 # C_q = 0*1e-8
 # C_h = 0*1e-4
 
@@ -307,7 +305,7 @@ def scale_to_01(df):
     return (df-df.min())/(df.max()-df.min())
 
 for i in range(6):
-    data_prepared['omega_c[%i]'%(i+1)]=scale_to_01(data_prepared['PWM_motor[%i]'%(i+1)])*U_batt*kv_motor*2*np.pi/60
+    data_prepared['omega_c[%i]'%(i+1)]=scale_to_01(data_prepared['PWM_motor[%i]'%(i+1)])*925
 
 "splitting the dataset into nsec"
 data_batches=[data_prepared]
@@ -468,7 +466,7 @@ def arg_wrapping(batch,id_variables,data_index,speed_pred_previous):
         VelinLDPlane   = function_moteur_physique[0](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
         dragDirection  = function_moteur_physique[1](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
         liftDirection  = function_moteur_physique[2](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
-        alpha_list[p] = function_moteur_physique[3](dragDirection, liftDirection, np.array([[1],[0],[0]]).flatten(), VelinLDPlane)
+        alpha_list[p] = -function_moteur_physique[3](dragDirection, liftDirection, np.array([[1],[0],[0]]).flatten(), VelinLDPlane, R)
     
        
     X=(alog.flatten(),v_log.flatten(),dt, Aire_list, Omega.flatten(), R.flatten(), v_pred.flatten(), v_W.flatten(), cp_list, alpha_list, alpha_0, \
@@ -618,3 +616,7 @@ for i in range(3):
     ax=plt.gcf().add_subplot(3,1,i+1)
     ax.plot(data_prepared['t'],data_prepared['speed[%i]'%(i)],color="green",label="data")
     plt.grid()
+    
+    
+    
+    
