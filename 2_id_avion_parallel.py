@@ -35,8 +35,8 @@ def main_func(x):
     # est un paramètre d'optimisation
     # sinon, le vent est considéré comme une constante
     
-    wind_signal=True
-    assume_nul_wind=False # if true, le signal de vent constant vaut zéro
+    wind_signal=False
+    assume_nul_wind=True # if true, le signal de vent constant vaut zéro
     nsecs=ns
     # nsecs désigne la taille du batch en secondes
     
@@ -491,7 +491,7 @@ def main_func(x):
             VelinLDPlane   = function_moteur_physique[0](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
             dragDirection  = function_moteur_physique[1](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
             liftDirection  = function_moteur_physique[2](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
-            alpha_list[p] = function_moteur_physique[3](dragDirection, liftDirection, np.array([[1],[0],[0]]).flatten(), VelinLDPlane)
+            alpha_list[p] = -function_moteur_physique[3](dragDirection, liftDirection, np.array([[1],[0],[0]]).flatten(), VelinLDPlane,R)
         
        
         X=(alog.flatten(),v_log.flatten(),dt, Aire_list, Omega.flatten(), R.flatten(), v_pred.flatten(), v_W.flatten(), cp_list, alpha_list, alpha_0, \
@@ -532,7 +532,7 @@ def main_func(x):
             X=arg_wrapping(batch,id_variables,scalers,i,speed_pred_prev)
 
             Y=model_func(*X)
-            print(Y)
+            # print(Y)
             acc_pred[i]=Y[:3].reshape(3,)
             speed_pred[i]=Y[3:6].reshape(3,)
             square_error_a[i]=Y[6:7].reshape(1,)
