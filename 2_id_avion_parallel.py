@@ -60,7 +60,7 @@ def main_func(x):
     
     train_proportion=0.8 #proportion data train vs validation
     
-    log_path=os.path.join('/home/mehdi/Documents/identification_modele_avion/Logs/log_real/log_real.csv')     
+    log_path=os.path.join('./logs/avion/vol1/log_real_processed.csv')     
     save_dir_name="results"
 
     # Paramètres utilitaires
@@ -76,11 +76,11 @@ def main_func(x):
                                             0.34*0.1* 1.292 * 0.5, \
                                             1.08*0.31* 1.292 * 0.5
     Aire_list = [Aire_1,Aire_2,Aire_3,Aire_4,Aire_5]
-    cp_1,cp_2,cp_3,cp_4,cp_5 = np.array([-0.013,0.475,-0.040],       dtype=np.float).flatten(), \
-                                np.array([-0.013,-0.475,-0.040],      dtype=np.float).flatten(), \
-                                np.array([-1.006,0.85,-0.134],    dtype=np.float).flatten(),\
-                                np.array([-1.006,-0.85,-0.134],   dtype=np.float).flatten(),\
-                                np.array([0.021,0,-0.064],          dtype=np.float).flatten()
+    cp_1,cp_2,cp_3,cp_4,cp_5 = np.array([-0.013,0.475,-0.040],       dtype=float).flatten(), \
+                                np.array([-0.013,-0.475,-0.040],      dtype=float).flatten(), \
+                                np.array([-1.006,0.85,-0.134],    dtype=float).flatten(),\
+                                np.array([-1.006,-0.85,-0.134],   dtype=float).flatten(),\
+                                np.array([0.021,0,-0.064],          dtype=float).flatten()
     cp_list=[cp_1,cp_2,cp_3,cp_4,cp_5]
     
     Area=np.pi*(11.0e-02)**2
@@ -286,17 +286,17 @@ def main_func(x):
     
     # on choisit tmin et tmax selon quel log on utilise
     
-    if "vol12" in log_path:
-        tmin,tmax=(-1,1e10) 
-    elif "vol1" in log_path:
-        tmin,tmax=(41,265) 
-    elif "vol2" in log_path:
-        tmin,tmax=(10,140) 
-    tmin=1
-    tmax=500
+    # if "vol12" in log_path:
+    #     tmin,tmax=(-1,1e10) 
+    # elif "vol1" in log_path:
+    #     tmin,tmax=(41,265) 
+    # elif "vol2" in log_path:
+    #     tmin,tmax=(10,140) 
+    # tmin=1
+    # tmax=500
         
-    prep_data=prep_data[prep_data['t']>tmin]
-    prep_data=prep_data[prep_data['t']<tmax]
+    # prep_data=prep_data[prep_data['t']>tmin]
+    # prep_data=prep_data[prep_data['t']<tmax]
     prep_data=prep_data.reset_index()
     
     
@@ -309,7 +309,7 @@ def main_func(x):
     prep_data=prep_data.drop(index=[0,len(prep_data)-1])
     prep_data=prep_data.reset_index()
     
-    data_prepared=prep_data[:len(prep_data)]
+    data_prepared=prep_data[:len(prep_data)//50]
     
     
     
@@ -337,6 +337,8 @@ def main_func(x):
         N_val_batches=N_minibatches-N_train_batches
     print("DATA PROCESS DONE")
         
+    
+    # print("Importing model func...")
     # %%   ####### Identification Data Struct
     
     # On répartit les variables entre deux dicts: id_variables et non_id_variables
@@ -419,25 +421,25 @@ def main_func(x):
         
         i=data_index
         
-        cost_scaler_v=1.0
-        cost_scaler_a=1.0
+        # cost_scaler_v=1.0
+        # cost_scaler_a=1.0
     
         dt=min(batch['dt'][i],1e-2)
 
         vlog_i,vlog_j,vlog_k=batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i]
-        v_log = np.array([vlog_i],
+        v_log = np.array([[vlog_i],
                        [vlog_j],
-                       [vlog_k])
+                       [vlog_k]])
         
         vpred_i,vpred_j,vpred_k=speed_pred_previous 
-        v_pred=np.array([vpred_i],
+        v_pred=np.array([[vpred_i],
                        [vpred_j],
-                       [vpred_k])
+                       [vpred_k]])
         
         alog_i,alog_j,alog_k=batch['acc_ned_grad[0]'][i],batch['acc_ned_grad[1]'][i],batch['acc_ned_grad[2]'][i]
-        alog=np.array([alog_i],
+        alog=np.array([[alog_i],
                        [alog_j],
-                       [alog_k])
+                       [alog_k]])
         
         # vnext_i,vnext_j,vnext_k=batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i]
         
@@ -449,9 +451,9 @@ def main_func(x):
         if wind_signal:
             vw_i,vw_j=vw_i[i],vw_j[i]
             
-        v_W=np.array([vw_i],
+        v_W=np.array([[vw_i],
                      [vw_j], 
-                     [vwk0])
+                     [vwk0]])
         
         Omega=np.zeros(3)
         
@@ -466,19 +468,33 @@ def main_func(x):
         
         R=tf3d.quaternions.quat2mat(np.array([batch['q[%i]'%(j)][i] for j in range(4)]))
         R_list =[R,R,Rotation(R,45),Rotation(R,-45),R]
-        omega_c1,omega_c2,omega_c3,omega_c4,omega_c5,omega_c6=np.array([batch['omega_c[%i]'%(j)][i] for j in range(1,7,1)])
 
-        delta0_list=np.array([0,0,0,0,0])     ## Commande entre -15:15 pour les 4 premier terme, le dernier terme vaut 0 (pour l'homogéinité des longueur)
-        omega_rotor = 500                       ## Vitesse de rotation des helices (supposé les mêmes pour les deux moteurs)
+
+        "reverse mixing"
+        pwm_null_angle=1527
+        RW_delta=batch['PWM_motor[1]'][i]-pwm_null_angle
+        LW_delta=batch['PWM_motor[2]'][i]-pwm_null_angle
+        RVT_delta=batch['PWM_motor[3]'][i]-pwm_null_angle
+        LVT_delta=batch['PWM_motor[4]'][i]-pwm_null_angle
+
+        delta0_list=np.array([RW_delta,-LW_delta,RVT_delta,-LVT_delta,0.0])  
+        
+        delta_pwm=500
+        delta0_list/=delta_pwm
+        
+        delta0_list=delta0_list*15.0/180.0*np.pi
+        
+        ## Commande entre -15:15 pour les 4 premier terme, le dernier terme vaut 0 (pour l'homogéinité des longueur)
+        omega_rotor = batch['omega_c[5]'][i]                    ## Vitesse de rotation des helices (supposé les mêmes pour les deux moteurs)
         alpha_list=[0,0,0,0,0]
         for p, cp in enumerate(cp_list) :          # Cette boucle calcul les coefs aéro pour chaque surface 
             VelinLDPlane   = function_moteur_physique[0](Omega, cp, v_log.flatten(), v_W, R_list[p].flatten())
             dragDirection  = function_moteur_physique[1](Omega, cp, v_log.flatten(), v_W, R_list[p].flatten())
             liftDirection  = function_moteur_physique[2](Omega, cp, v_log.flatten(), v_W, R_list[p].flatten())
-            alpha_list[p] = function_moteur_physique[3](dragDirection, liftDirection, np.array([1],[0],[0]), VelinLDPlane)
+            alpha_list[p] = function_moteur_physique[3](dragDirection, liftDirection, np.array([[1],[0],[0]]), VelinLDPlane)
         
         
-        X=(alog,v_log,dt, Aire_list, Omega, R, v_pred, v_W, cp_list, alpha_list, alpha_0, alpha_s, delta0_list, delta_s, \
+        X=(alog,v_log,dt, Aire_list, Omega, R.flatten(), v_pred, v_W, cp_list, alpha_list, alpha_0, alpha_s, delta0_list, delta_s, \
                                 cl1sa, cd1fp, coeff_drag_shift, coeff_lift_shift, coeff_lift_gain, cd0fp, cd0sa, cd1sa, C_t, C_q, C_h, omega_rotor, \
                                   g, m)
         
@@ -512,18 +528,17 @@ def main_func(x):
             print("\r Pred on batch %i / %i "%(i,max(batch.index)), end='', flush=True)
     
             speed_pred_prev=speed_pred[i-1] if i>min(batch.index) else (batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i])
-            omegas_pred=omegas[i-1] if i>0 else np.array([batch['omega_c[%i]'%(j)][i] for j in range(1,7,1)])
-            X=arg_wrapping(batch,id_variables,scalers,i,speed_pred_prev,omegas_pred)
-    
+
+            X=arg_wrapping(batch,id_variables,scalers,i,speed_pred_prev)
+            print(X)
             Y=model_func(*X)
     
             acc_pred[i]=Y[:3].reshape(3,)
             speed_pred[i]=Y[3:6].reshape(3,)
-            omegas[i]=Y[6:12].reshape(6,)
-            square_error_a[i]=Y[12:13].reshape(1,)
-            square_error_v[i]=Y[13:14].reshape(1,)
-            jac_error_a[i]=Y[14:14+len(id_variables)].reshape(len(id_variables),)
-            jac_error_v[i]=Y[14+len(id_variables):14+2*len(id_variables)].reshape(len(id_variables),)
+            square_error_a[i]=Y[6:7].reshape(1,)
+            square_error_v[i]=Y[7:8].reshape(1,)
+            jac_error_a[i]=Y[8:8+len(id_variables)].reshape(len(id_variables),)
+            jac_error_v[i]=Y[8+len(id_variables):8+2*len(id_variables)].reshape(len(id_variables),)
             
     
 
@@ -609,7 +624,7 @@ def main_func(x):
 
         id_var=X_to_dict(X,base_dict=id_variables_base)
 
-        acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch,id_var,scalers)
+        acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch,id_var,scalers)
         
         used_jac=jac_error_v if fit_on_v else jac_error_a
         used_err=square_error_v if fit_on_v else square_error_a
@@ -736,7 +751,7 @@ def main_func(x):
                 "si on a choisi d'utiliser le gradient custom pour minimiser"
                 if fit_strategy=="custom_gradient":
                 
-                    acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
+                    acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
                     
                     temp_id_variables={}
                     for i in id_variables:
@@ -873,7 +888,7 @@ def main_func(x):
                     save_indexes=np.arange(0,N_val_batches,max(1,N_val_batches//10))
                     write_this_step=(k in save_indexes) or ns=='all'
 
-                    acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
+                    acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
                     
                     val_sc_a+=np.mean(square_error_a,axis=0)
                     val_sc_v+=np.mean(square_error_v ,axis=0)   
@@ -907,7 +922,7 @@ def main_func(x):
                 val_sc_a/=N_val_batches
                 val_sc_v/=N_val_batches
     
-            acc_pred,speed_pred,omegas,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(data_prepared,id_variables,scalers)
+            acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(data_prepared,id_variables,scalers)
             total_sc_a=np.sqrt(np.mean(square_error_a,axis=0))
             total_sc_v=np.sqrt(np.mean(square_error_v ,axis=0))
             
