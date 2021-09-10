@@ -65,22 +65,20 @@ def main_func(x):
 
     # Paramètres utilitaires
     
-    mass=369 #batterie
-    mass+=1640-114 #corps-carton
-    mass/=1e3
+    mass=8.5
     g=np.array([0,0,9.81])
     
     Aire_1,Aire_2,Aire_3,Aire_4,Aire_5 =    0.62*0.262* 1.292 * 0.5,\
-                                            0.62*0.262* 1.292 * 0.5, \
-                                            0.34*0.01* 1.292 * 0.5,\
-                                            0.34*0.1* 1.292 * 0.5, \
-                                            1.08*0.31* 1.292 * 0.5
+                                        0.62*0.262* 1.292 * 0.5, \
+                                        0.34*0.01* 1.292 * 0.5,\
+                                        0.34*0.1* 1.292 * 0.5, \
+                                        1.08*0.31* 1.292 * 0.5
     Aire_list = [Aire_1,Aire_2,Aire_3,Aire_4,Aire_5]
     cp_1,cp_2,cp_3,cp_4,cp_5 = np.array([-0.013,0.475,-0.040],       dtype=float).flatten(), \
-                                np.array([-0.013,-0.475,-0.040],      dtype=float).flatten(), \
-                                np.array([-1.006,0.85,-0.134],    dtype=float).flatten(),\
-                                np.array([-1.006,-0.85,-0.134],   dtype=float).flatten(),\
-                                np.array([0.021,0,-0.064],          dtype=float).flatten()
+                            np.array([-0.013,-0.475,-0.040],      dtype=float).flatten(), \
+                            np.array([-1.006,0.85,-0.134],    dtype=float).flatten(),\
+                            np.array([-1.006,-0.85,-0.134],   dtype=float).flatten(),\
+                            np.array([0.021,0,-0.064],          dtype=float).flatten()
     cp_list=[cp_1,cp_2,cp_3,cp_4,cp_5]
     
     Area=np.pi*(11.0e-02)**2
@@ -98,9 +96,9 @@ def main_func(x):
     alpha_0=0.07
     alpha_s = 0.3391428111
     delta_s = 15.0*np.pi/180
-    cd0sa_0 = 0.010
+    cd0sa_0 = 0.9
     cd0fp_0 = 0.010
-    cd1sa_0 = 4.55 
+    cd1sa_0 = 2
     cl1sa_0 = 5 
     cd1fp_0 = 2.5 
     coeff_drag_shift_0= 0.5 
@@ -109,6 +107,7 @@ def main_func(x):
     C_t0 = 1.1e-4
     C_q = 1e-8
     C_h = 1e-4
+
     
     
     physical_params=[mass,
@@ -408,11 +407,11 @@ def main_func(x):
     import transforms3d as tf3d 
     import copy 
     
-    def arg_wrapping(batch,id_variables,scalers,data_index,speed_pred_previous):
+    def arg_wrapping(batch,id_variables,data_index,speed_pred_previous):
         
         "cette fonction sert à fabriquer, à partir des inputs, l'argument que "
         "l'on enverra en input à la fonction lambdifiée de la partie sympy    "
-
+        
         "batch est un dataframe"
         "id_variables sont les variables d'identification"
         "scalers sont les coefficients de mise à l'échelle"
@@ -425,9 +424,9 @@ def main_func(x):
         
         # cost_scaler_v=1.0
         # cost_scaler_a=1.0
-    
+        
         dt=min(batch['dt'][i],1e-2)
-
+        
         vlog_i,vlog_j,vlog_k=batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i]
         v_log = np.array([[vlog_i],
                        [vlog_j],
@@ -437,7 +436,7 @@ def main_func(x):
         v_pred=np.array([[vpred_i],
                        [vpred_j],
                        [vpred_k]])
-
+        
         alog_i,alog_j,alog_k=batch['acc_ned_grad[0]'][i],batch['acc_ned_grad[1]'][i],batch['acc_ned_grad[2]'][i]
         alog=np.array([[alog_i],
                        [alog_j],
@@ -469,9 +468,10 @@ def main_func(x):
         coeff_lift_gain=non_id_variables['coeff_lift_gain'] if 'coeff_lift_gain' in non_id_variables else id_variables['coeff_lift_gain']
         C_t=non_id_variables['Ct'] if 'Ct' in non_id_variables else id_variables['Ct']
 
+        
         R=tf3d.quaternions.quat2mat(np.array([batch['q[%i]'%(j)][i] for j in range(4)]))
         R_list =[R,R,Rotation(R,45),Rotation(R,-45),R]
-
+        
         
         "reverse mixing"
         pwm_null_angle=1527
@@ -479,7 +479,7 @@ def main_func(x):
         LW_delta=batch['PWM_motor[2]'][i]-pwm_null_angle
         RVT_delta=batch['PWM_motor[3]'][i]-pwm_null_angle
         LVT_delta=batch['PWM_motor[4]'][i]-pwm_null_angle
-
+        
         delta0_list=np.array([RW_delta,-LW_delta,RVT_delta,-LVT_delta,0.0])  
         
         delta_pwm=500
@@ -494,33 +494,32 @@ def main_func(x):
             VelinLDPlane   = function_moteur_physique[0](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
             dragDirection  = function_moteur_physique[1](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
             liftDirection  = function_moteur_physique[2](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
-
-            alpha_list[p] = function_moteur_physique[3](dragDirection, liftDirection, np.array([1,0,0]), VelinLDPlane)
-
-            
+            alpha_list[p] = -function_moteur_physique[3](dragDirection, liftDirection, np.array([[1],[0],[0]]).flatten(), VelinLDPlane)
+    
         X=(alog.flatten(),v_log.flatten(),dt, Aire_list, Omega.flatten(), R.flatten(), v_pred.flatten(), v_W.flatten(), cp_list, alpha_list, alpha_0, \
            alpha_s, delta0_list.flatten(), delta_s, cl1sa, cd1fp, coeff_drag_shift, coeff_lift_shift, coeff_lift_gain,\
                cd0fp, cd0sa, cd1sa, C_t, C_q, C_h, omega_rotor, g.flatten(), m)
-
+        
         return X
+
+   
     
-    
-    def pred_on_batch(batch,id_variables,scalers):
-    
+    def pred_on_batch(batch,id_variables):
+        
         "si n est la taille du batch"
         "cette fonction sert à appeler n fois la fonction lambdifiée"
         " de sympy "
         
         "on obtient n acc prédites, n vitesses prédites, n jacobiennes...."
         
-    
+        
         "batch est un dataframe"
         "id_variables sont les variables d'identification"
         "scalers sont les coefficients de mise à l'échelle"
         
         acc_pred=np.zeros((len(batch),3))
         speed_pred=np.zeros((len(batch),3))
-
+        
             
         square_error_a=np.zeros((len(batch),1))    
         square_error_v=np.zeros((len(batch),1))    
@@ -528,13 +527,13 @@ def main_func(x):
         jac_error_v=np.zeros((len(batch),len(id_variables)))
         
         for i in batch.index:
-
+        
             print("\r Pred on batch %i / %i "%(i,max(batch.index)), end='', flush=True)
-    
+        
             speed_pred_prev=speed_pred[i-1] if i>min(batch.index) else (batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i])
-
-            X=arg_wrapping(batch,id_variables,scalers,i,speed_pred_prev)
-
+        
+            X=arg_wrapping(batch,id_variables,i,speed_pred_prev)
+        
             Y=model_func(*X)
             # print(Y)
             acc_pred[i]=Y[:3].reshape(3,)
@@ -544,425 +543,424 @@ def main_func(x):
             jac_error_a[i]=Y[8:8+len(id_variables)].reshape(len(id_variables),)
             jac_error_v[i]=Y[8+len(id_variables):8+2*len(id_variables)].reshape(len(id_variables),)
             
-    
-
+        
+        
         return acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v
     
-
-    
-    # %%   Gradient
-    import random
-    
-
-    
-    def X_to_dict(X,base_dict=id_variables):
         
-        "sert à transformer un vecteur en dictionnaire "
+        # %%   Gradient
+        import random
         
-        out_dict={}
-        index_j=0
-        for i,key in enumerate(base_dict.keys()):
-                out_dict[key]=X[index_j:index_j+len(base_dict[key])] if isinstance(base_dict[key],np.ndarray) else X[index_j] 
-                index_j+=len(base_dict[key]) if isinstance(base_dict[key],np.ndarray) else 1
-        return out_dict
     
-    def dict_to_X(input_dict):
         
-        "sert à transformer un dictinonaire en vecteur "
-
-        out=np.r_[tuple([np.array(input_dict[key]).flatten() for key in input_dict])]
-        return out
-    
-    def prepare_dict(id_var,index):
-        "sert à processer le dictionnaire id_var"
-        "si wind_signal, on ne retient que la valeur index de id_var"
-        
-        if not wind_signal:
-            return id_var
-        else:
-            newdic={}
-            for k in id_var:
-                newdic[k]=id_var[k]
+        def X_to_dict(X,base_dict=id_variables):
             
-            newdic['vw_i'],newdic['vw_j']=newdic['vw_i'][index],newdic['vw_j'][index]
-            return newdic
-
-    def propagate_gradient(jac_array,id_variables,
-                           lr=base_lr):
-        "à partir de n jacobiennes et du dictionnaire des variables "
-        "d'identification, on calcule les nouveaux paramètres"
-        "cette fonction est la fonction que l'on utilisera si on choisit"
-        "la descente de gradient comme algorithme de minmisation"
-
-        X=dict_to_X(id_variables)
-
-        print(" --- Propagate %s grad : "%(log_name))
+            "sert à transformer un vecteur en dictionnaire "
+            
+            out_dict={}
+            index_j=0
+            for i,key in enumerate(base_dict.keys()):
+                    out_dict[key]=X[index_j:index_j+len(base_dict[key])] if isinstance(base_dict[key],np.ndarray) else X[index_j] 
+                    index_j+=len(base_dict[key]) if isinstance(base_dict[key],np.ndarray) else 1
+            return out_dict
         
-
-        J=np.zeros(len(X))
-        index_j=0
-        for i,key in enumerate(id_variables.keys()):
-            if type(id_variables[key]) is not np.ndarray:
-
-                J[index_j]=np.mean(jac_array[:,i])
-                index_j+=1
+        def dict_to_X(input_dict):
+            
+            "sert à transformer un dictinonaire en vecteur "
+    
+            out=np.r_[tuple([np.array(input_dict[key]).flatten() for key in input_dict])]
+            return out
+        
+        def prepare_dict(id_var,index):
+            "sert à processer le dictionnaire id_var"
+            "si wind_signal, on ne retient que la valeur index de id_var"
+            
+            if not wind_signal:
+                return id_var
             else:
-                J[index_j:index_j+len(id_variables[key])]=jac_array[:,i]
-                index_j+=len(id_variables[key])
-
-        new_X=X-lr*J
-        new_dic=X_to_dict(new_X,id_variables)
-        return new_dic
-
-    def fun_cost_scipy(X,batch,scalers,writtargs):
-        
-        "cette fonction est la fonction que l'on utilisera si on choisit"
-        "scipy comme algorithme de minmisation"
-        "elle renvoie le coût, et la jacobienne"
-        
-        "X is the dict_to_X of id_variables"
-        "dict reconstruction "
-        
-        n,k,val_sc_a,val_sc_v,total_sc_a,total_sc_v,t0,write_this_step,id_variables_base=writtargs
-
-
-        id_var=X_to_dict(X,base_dict=id_variables_base)
-
-        acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch,id_var,scalers)
-        
-        used_jac=jac_error_v if fit_on_v else jac_error_a
-        used_err=square_error_v if fit_on_v else square_error_a
-
-        #calcul de la jacobienne
-        J=np.zeros(len(X))
-        index_j=0
-        for i,key in enumerate(id_var.keys()):
-            if type(id_var[key]) is not np.ndarray:
-
-                J[index_j]=np.mean(used_jac[:,i])
-                index_j+=1
-            else:
-                J[index_j:index_j+len(id_var[key])]=used_jac[:,i]
-                index_j+=len(id_var[key])
-
-
-
-        C=np.mean(used_err,axis=0)
-        
-        print("\n %s------ Cost (in scipy minim): %f\n"%(log_name,C))
-        
-        "on repasse les valeurs dans leur valeur physique "
-        realvals={}
-        for i in id_var.keys():
-            realvals[i]=id_var[i]*scalers[i] if ('vw' not in i) else id_var[i][0]*scalers[i]
-            
-        if write_this_step:
-            saver(name="epoch_%i_batch_%i_t_%f"%(n,k,time.time()-t0),save_path=spath,
-            id_variables=realvals,
-            train_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
-            train_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
-            val_sc_a=val_sc_a,
-            val_sc_v=val_sc_v,
-            total_sc_a=total_sc_a,
-            total_sc_v=total_sc_v)
-        if wind_signal and write_this_step:
-            windsave_df=pd.DataFrame(data=np.array([id_var['vw_i'],id_var['vw_j']]).T,columns=['w_i','w_j'])
-            nsave="WINDSIG_epoch_%i_batch_%i_t_%f"%(n,k,time.time())+".csv"
-            windsave_df.to_csv(os.path.join(spath,nsave))
-            del(windsave_df)
-        
-        return C,J
-    
-    # %% Train loop
-    from scipy.optimize import minimize
-    
-    def train_loop(data_batches,id_var,n_epochs=n_epochs):
-    
-        #     on commence par copier le dict courant et randomiser, puis on sauvegarde
-    
-        id_variables=copy.deepcopy(id_var)
-        print("Copy ...")
-        temp_shuffled_batches=copy.deepcopy(data_batches)
-        print("Done")
-        print("INIT")
-    
-        total_sc_a=-1
-        total_sc_v=-1
-        print('\n###################################')
-        print('############# Begin ident ###########')
-        print("id_variables=",prepare_dict(id_variables,0),
-              "train_sc_a=",-1,
-              "train_sc_v=",-1,
-              "val_sc_a=",-1,
-              "val_sc_v=",-1,
-              "total_sc_a=",total_sc_a,
-              "total_sc_v=",total_sc_v,)
-        print('###################################\n')
-    
-    
-        "on repasse les valeurs dans leur valeur physique "
-        realvals={}
-        for i in id_variables.keys():
-            realvals[i]=prepare_dict(id_variables,0)[i]*scalers[i]
-    
-        saver(name="start_",save_path=spath,
-              id_variables=realvals,
-              train_sc_a=-1,
-              train_sc_v=-1,
-              val_sc_a=-1,
-              val_sc_v=-1,
-              total_sc_a=total_sc_a,
-              total_sc_v=total_sc_v)
-        
-        print("Entering training loop...")
-        
-        
-        
-        for n in range(n_epochs):
-            "begin epoch"
-            
-            
-            "train score correspond au score sur le dataset de d'entrainement"
-            "val score correspond au score sur le dataset de validation "
-            "total score correspond au score sur la totalité du dataset"
-            
-            train_sc_a,train_sc_v=0,0
-            val_sc_a,val_sc_v=0,0
-            total_sc_a,total_sc_v=0,0
-            
-            random.shuffle(temp_shuffled_batches)
-            
-            # on commence par les batches d'entrainement 
-            
-            for k,batch_ in enumerate(temp_shuffled_batches[:N_train_batches]):
+                newdic={}
+                for k in id_var:
+                    newdic[k]=id_var[k]
                 
-                "si les batches sont tout petits, on génère beaucoup de résultats"
-                "on ne veut pas tous els sauvegarder: ça prend de la place et "
-                " ça peut provoquer des fuites de RAM "
+                newdic['vw_i'],newdic['vw_j']=newdic['vw_i'][index],newdic['vw_j'][index]
+                return newdic
+    
+        def propagate_gradient(jac_array,id_variables,
+                               lr=base_lr):
+            "à partir de n jacobiennes et du dictionnaire des variables "
+            "d'identification, on calcule les nouveaux paramètres"
+            "cette fonction est la fonction que l'on utilisera si on choisit"
+            "la descente de gradient comme algorithme de minmisation"
+    
+            X=dict_to_X(id_variables)
+    
+            print(" --- Propagate %s grad : "%(log_name))
+            
+    
+            J=np.zeros(len(X))
+            index_j=0
+            for i,key in enumerate(id_variables.keys()):
+                if type(id_variables[key]) is not np.ndarray:
+    
+                    J[index_j]=np.mean(jac_array[:,i])
+                    index_j+=1
+                else:
+                    J[index_j:index_j+len(id_variables[key])]=jac_array[:,i]
+                    index_j+=len(id_variables[key])
+    
+            new_X=X-lr*J
+            new_dic=X_to_dict(new_X,id_variables)
+            return new_dic
+    
+        def fun_cost_scipy(X,batch,scalers,writtargs):
+            
+            "cette fonction est la fonction que l'on utilisera si on choisit"
+            "scipy comme algorithme de minmisation"
+            "elle renvoie le coût, et la jacobienne"
+            
+            "X is the dict_to_X of id_variables"
+            "dict reconstruction "
+            
+            n,k,val_sc_a,val_sc_v,total_sc_a,total_sc_v,t0,write_this_step,id_variables_base=writtargs
+    
+    
+            id_var=X_to_dict(X,base_dict=id_variables_base)
+    
+            acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch,id_var,scalers)
+            
+            used_jac=jac_error_v if fit_on_v else jac_error_a
+            used_err=square_error_v if fit_on_v else square_error_a
+    
+            #calcul de la jacobienne
+            J=np.zeros(len(X))
+            index_j=0
+            for i,key in enumerate(id_var.keys()):
+                if type(id_var[key]) is not np.ndarray:
+    
+                    J[index_j]=np.mean(used_jac[:,i])
+                    index_j+=1
+                else:
+                    J[index_j:index_j+len(id_var[key])]=used_jac[:,i]
+                    index_j+=len(id_var[key])
+    
+    
+    
+            C=np.mean(used_err,axis=0)
+            
+            print("\n %s------ Cost (in scipy minim): %f\n"%(log_name,C))
+            
+            "on repasse les valeurs dans leur valeur physique "
+            realvals={}
+            for i in id_var.keys():
+                realvals[i]=id_var[i]*scalers[i] if ('vw' not in i) else id_var[i][0]*scalers[i]
                 
-                "on se donne donc des indexes de sauvegarde; en l'occurrence"
-                " tous les 20% du dataset "
+            if write_this_step:
+                saver(name="epoch_%i_batch_%i_t_%f"%(n,k,time.time()-t0),save_path=spath,
+                id_variables=realvals,
+                train_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
+                train_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
+                val_sc_a=val_sc_a,
+                val_sc_v=val_sc_v,
+                total_sc_a=total_sc_a,
+                total_sc_v=total_sc_v)
+            if wind_signal and write_this_step:
+                windsave_df=pd.DataFrame(data=np.array([id_var['vw_i'],id_var['vw_j']]).T,columns=['w_i','w_j'])
+                nsave="WINDSIG_epoch_%i_batch_%i_t_%f"%(n,k,time.time())+".csv"
+                windsave_df.to_csv(os.path.join(spath,nsave))
+                del(windsave_df)
+            
+            return C,J
+        
+        # %% Train loop
+        from scipy.optimize import minimize
+        
+        def train_loop(data_batches,id_var,n_epochs=n_epochs):
+        
+            #     on commence par copier le dict courant et randomiser, puis on sauvegarde
+        
+            id_variables=copy.deepcopy(id_var)
+            print("Copy ...")
+            temp_shuffled_batches=copy.deepcopy(data_batches)
+            print("Done")
+            print("INIT")
+        
+            total_sc_a=-1
+            total_sc_v=-1
+            print('\n###################################')
+            print('############# Begin ident ###########')
+            print("id_variables=",prepare_dict(id_variables,0),
+                  "train_sc_a=",-1,
+                  "train_sc_v=",-1,
+                  "val_sc_a=",-1,
+                  "val_sc_v=",-1,
+                  "total_sc_a=",total_sc_a,
+                  "total_sc_v=",total_sc_v,)
+            print('###################################\n')
+        
+        
+            "on repasse les valeurs dans leur valeur physique "
+            realvals={}
+            for i in id_variables.keys():
+                realvals[i]=prepare_dict(id_variables,0)[i]*scalers[i]
+        
+            saver(name="start_",save_path=spath,
+                  id_variables=realvals,
+                  train_sc_a=-1,
+                  train_sc_v=-1,
+                  val_sc_a=-1,
+                  val_sc_v=-1,
+                  total_sc_a=total_sc_a,
+                  total_sc_v=total_sc_v)
+            
+            print("Entering training loop...")
+            
+            
+            
+            for n in range(n_epochs):
+                "begin epoch"
                 
-                save_indexes=np.arange(0,N_train_batches,max(N_train_batches//5,1))
                 
-                write_this_step=(k in save_indexes) or ns=='all'
+                "train score correspond au score sur le dataset de d'entrainement"
+                "val score correspond au score sur le dataset de validation "
+                "total score correspond au score sur la totalité du dataset"
                 
-                if fit_strategy not in ('custom_gradient','scipy'):
-                    print(" ERROR WRONG FIT STRATEGY !!!!")
-                    break
+                train_sc_a,train_sc_v=0,0
+                val_sc_a,val_sc_v=0,0
+                total_sc_a,total_sc_v=0,0
+                
+                random.shuffle(temp_shuffled_batches)
+                
+                # on commence par les batches d'entrainement 
+                
+                for k,batch_ in enumerate(temp_shuffled_batches[:N_train_batches]):
+                    
+                    "si les batches sont tout petits, on génère beaucoup de résultats"
+                    "on ne veut pas tous els sauvegarder: ça prend de la place et "
+                    " ça peut provoquer des fuites de RAM "
+                    
+                    "on se donne donc des indexes de sauvegarde; en l'occurrence"
+                    " tous les 20% du dataset "
+                    
+                    save_indexes=np.arange(0,N_train_batches,max(N_train_batches//5,1))
+                    
+                    write_this_step=(k in save_indexes) or ns=='all'
+                    
+                    if fit_strategy not in ('custom_gradient','scipy'):
+                        print(" ERROR WRONG FIT STRATEGY !!!!")
+                        break
+                                
+                    
+                    "si on a choisi d'utiliser le gradient custom pour minimiser"
+                    if fit_strategy=="custom_gradient":
+                    
+                        acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
+                        
+                        temp_id_variables={}
+                        for i in id_variables:
+                            temp_id_variables[i]=id_variables[i]
+    
+    
+                        if wind_signal:
+                            for key_ in ('vw_i','vw_j'):
+                                temp_id_variables[key_]=id_variables[key_][batch_.index]
+    
+                        new_id_variables=propagate_gradient(jac_error_v if fit_on_v else jac_error_a,temp_id_variables)
+    
+    
+                        if wind_signal:
+                            for key_ in ('vw_i','vw_j'):
+                                tparr=id_variables[key_]
+                                tparr[batch_.index]=new_id_variables[key_]
+                                new_id_variables[key_]=tparr
+    
+                        id_variables={}
+                        for i in new_id_variables:
+                            id_variables[i]=new_id_variables[i]
+                        
+                        
+                        train_sc_a+=np.sqrt(np.mean(square_error_a,axis=0))
+                        train_sc_v+=np.sqrt(np.mean(square_error_v,axis=0))
+                        print(" %s --- EPOCH : %i/%i || Train batch : %i/%i || PROGRESS: %i/%i [ta,tv]=[%f,%f]"%(log_name,n,
+                                                                                                          n_epochs,
+                                                                                                          k,N_train_batches,
+                                                                                                          k,len(temp_shuffled_batches),
+                                                                                                          np.sqrt(np.mean(square_error_a,axis=0)),
+                                                                                                          np.sqrt(np.mean(square_error_v,axis=0))))
+                        
+                        realvals={}
+                        for i in id_variables.keys():
+                            realvals[i]=prepare_dict(id_variables,k)[i]*scalers[i] if ('vw' not in i) else id_variables[i][0]*scalers[i]
+    
+    
+    
+                        if write_this_step:
+    
+                            saver(name="epoch_%i_batch_%i"%(n,k),save_path=spath,
+                              id_variables=realvals,
+                              train_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
+                              train_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
+                              val_sc_a=val_sc_a,
+                              val_sc_v=val_sc_v,
+                              total_sc_a=total_sc_a,
+                              total_sc_v=total_sc_v)
                             
-                
-                "si on a choisi d'utiliser le gradient custom pour minimiser"
-                if fit_strategy=="custom_gradient":
-                
-                    acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
-                    
-                    temp_id_variables={}
-                    for i in id_variables:
-                        temp_id_variables[i]=id_variables[i]
-
-
-                    if wind_signal:
-                        for key_ in ('vw_i','vw_j'):
-                            temp_id_variables[key_]=id_variables[key_][batch_.index]
-
-                    new_id_variables=propagate_gradient(jac_error_v if fit_on_v else jac_error_a,temp_id_variables)
-
-
-                    if wind_signal:
-                        for key_ in ('vw_i','vw_j'):
-                            tparr=id_variables[key_]
-                            tparr[batch_.index]=new_id_variables[key_]
-                            new_id_variables[key_]=tparr
-
-                    id_variables={}
-                    for i in new_id_variables:
-                        id_variables[i]=new_id_variables[i]
-                    
-                    
-                    train_sc_a+=np.sqrt(np.mean(square_error_a,axis=0))
-                    train_sc_v+=np.sqrt(np.mean(square_error_v,axis=0))
-                    print(" %s --- EPOCH : %i/%i || Train batch : %i/%i || PROGRESS: %i/%i [ta,tv]=[%f,%f]"%(log_name,n,
-                                                                                                      n_epochs,
-                                                                                                      k,N_train_batches,
-                                                                                                      k,len(temp_shuffled_batches),
-                                                                                                      np.sqrt(np.mean(square_error_a,axis=0)),
-                                                                                                      np.sqrt(np.mean(square_error_v,axis=0))))
-                    
-                    realvals={}
-                    for i in id_variables.keys():
-                        realvals[i]=prepare_dict(id_variables,k)[i]*scalers[i] if ('vw' not in i) else id_variables[i][0]*scalers[i]
-
-
-
-                    if write_this_step:
-
-                        saver(name="epoch_%i_batch_%i"%(n,k),save_path=spath,
-                          id_variables=realvals,
-                          train_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
-                          train_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
-                          val_sc_a=val_sc_a,
-                          val_sc_v=val_sc_v,
-                          total_sc_a=total_sc_a,
-                          total_sc_v=total_sc_v)
+                            if wind_signal:
+                                print([i for i in id_variables],[id_variables[key] for key in id_variables.keys()])
+                                windsave_df=pd.DataFrame(data=np.array([id_variables['vw_i'],id_variables['vw_j']]).T,columns=['w_i','w_j'])
+                                nsave="WINDSIG_epoch_%i_batch_%i"%(n,k)+".csv"
+                                windsave_df.to_csv(os.path.join(spath,nsave))
+                                del(windsave_df)
+                            gc.collect()
+                            
+                            
+                            
+                            
+                    elif fit_strategy=="scipy":
+                        
+                        "si on a choisi d'utiliser scipy pour minimiser"
+                        
+                        temp_id_variables={}
+                        for i in id_variables:
+                            temp_id_variables[i]=id_variables[i]
+                            
+                        "il faut s'y prendre comme ceci pour copier un dict,"
+                        "faire dict_B=dict_A fait que si on modifie B on modifie A"
+                        
+    
+                        if wind_signal:
+                            for key_ in ('vw_i','vw_j'):
+                                temp_id_variables[key_]=id_variables[key_][batch_.index]
+                                
+    
+                        X_start=dict_to_X(temp_id_variables)
+                        #bnds=[bounds[i] for i in id_variables]
+    
+    
+                        writtargs=[n,k,val_sc_a,val_sc_v,total_sc_a,total_sc_v,time.time(),write_this_step,temp_id_variables]
+                           
+                        sol_scipy=minimize(fun_cost_scipy,
+                                           X_start,
+                                           args=(batch_,scalers,writtargs),
+                                            method="L-BFGS-B" if ns==-1 else 'SLSQP',
+                                            jac=True)#,options={"maxiter":1})
+                        
+                        new_id_variables=X_to_dict(sol_scipy["x"],base_dict=temp_id_variables)
                         
                         if wind_signal:
-                            print([i for i in id_variables],[id_variables[key] for key in id_variables.keys()])
+                            for key_ in ('vw_i','vw_j'):
+                                tparr=id_variables[key_]
+                                print(key_,tparr,new_id_variables[key_])
+                                tparr[batch_.index]=new_id_variables[key_]
+                                new_id_variables[key_]=tparr
+    
+                        id_variables={}
+                        for i in new_id_variables:
+                            id_variables[i]=new_id_variables[i]
+                        
+                        if wind_signal and write_this_step:
                             windsave_df=pd.DataFrame(data=np.array([id_variables['vw_i'],id_variables['vw_j']]).T,columns=['w_i','w_j'])
                             nsave="WINDSIG_epoch_%i_batch_%i"%(n,k)+".csv"
                             windsave_df.to_csv(os.path.join(spath,nsave))
                             del(windsave_df)
-                        gc.collect()
-                        
-                        
-                        
-                        
-                elif fit_strategy=="scipy":
-                    
-                    "si on a choisi d'utiliser scipy pour minimiser"
-                    
-                    temp_id_variables={}
-                    for i in id_variables:
-                        temp_id_variables[i]=id_variables[i]
-                        
-                    "il faut s'y prendre comme ceci pour copier un dict,"
-                    "faire dict_B=dict_A fait que si on modifie B on modifie A"
-                    
-
-                    if wind_signal:
-                        for key_ in ('vw_i','vw_j'):
-                            temp_id_variables[key_]=id_variables[key_][batch_.index]
                             
-
-                    X_start=dict_to_X(temp_id_variables)
-                    #bnds=[bounds[i] for i in id_variables]
-
-
-                    writtargs=[n,k,val_sc_a,val_sc_v,total_sc_a,total_sc_v,time.time(),write_this_step,temp_id_variables]
-                       
-                    sol_scipy=minimize(fun_cost_scipy,
-                                       X_start,
-                                       args=(batch_,scalers,writtargs),
-                                        method="L-BFGS-B" if ns==-1 else 'SLSQP',
-                                        jac=True)#,options={"maxiter":1})
-                    
-                    new_id_variables=X_to_dict(sol_scipy["x"],base_dict=temp_id_variables)
-                    
-                    if wind_signal:
-                        for key_ in ('vw_i','vw_j'):
-                            tparr=id_variables[key_]
-                            print(key_,tparr,new_id_variables[key_])
-                            tparr[batch_.index]=new_id_variables[key_]
-                            new_id_variables[key_]=tparr
-
-                    id_variables={}
-                    for i in new_id_variables:
-                        id_variables[i]=new_id_variables[i]
-                    
-                    if wind_signal and write_this_step:
-                        windsave_df=pd.DataFrame(data=np.array([id_variables['vw_i'],id_variables['vw_j']]).T,columns=['w_i','w_j'])
-                        nsave="WINDSIG_epoch_%i_batch_%i"%(n,k)+".csv"
-                        windsave_df.to_csv(os.path.join(spath,nsave))
-                        del(windsave_df)
-                        
-                    if write_this_step:
-                        gc.collect()
+                        if write_this_step:
+                            gc.collect()
+                            
+                            
+                        current_score=sol_scipy["fun"]
+                        current_score_label="tv" if fit_on_v else "ta"
+                        print(" %s --- EPOCH : %i/%i || Train batch : %i/%i || PROGRESS: %i/%i [%s]=[%f]"%(log_name,n,
+                                                                                                          n_epochs,
+                                                                                                          k,N_train_batches,
+                                                                                                          k,len(temp_shuffled_batches),
+                                                                                                          current_score_label,
+                                                                                                          current_score))  
+    
+    
                         
                         
-                    current_score=sol_scipy["fun"]
-                    current_score_label="tv" if fit_on_v else "ta"
-                    print(" %s --- EPOCH : %i/%i || Train batch : %i/%i || PROGRESS: %i/%i [%s]=[%f]"%(log_name,n,
-                                                                                                      n_epochs,
-                                                                                                      k,N_train_batches,
-                                                                                                      k,len(temp_shuffled_batches),
-                                                                                                      current_score_label,
-                                                                                                      current_score))  
-
-
-                    
-                    
-            train_sc_a/=N_train_batches
-            train_sc_v/=N_train_batches
+                train_sc_a/=N_train_batches
+                train_sc_v/=N_train_batches
+                
+                
+                # on itère sur les batches de validation
+                if ns!="all" and N_val_batches>0:
+                    for k,batch_ in enumerate(temp_shuffled_batches[N_train_batches:]):
             
-            
-            # on itère sur les batches de validation
-            if ns!="all" and N_val_batches>0:
-                for k,batch_ in enumerate(temp_shuffled_batches[N_train_batches:]):
+                        save_indexes=np.arange(0,N_val_batches,max(1,N_val_batches//10))
+                        write_this_step=(k in save_indexes) or ns=='all'
+    
+                        acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
+                        
+                        val_sc_a+=np.mean(square_error_a,axis=0)
+                        val_sc_v+=np.mean(square_error_v ,axis=0)   
+                        print(" %s --- EPOCH : %i/%i || Eval batch : %i/%i || PROGRESS: %i/%i [va,vv]=[%f,%f]"%(log_name,
+                                                                                                          n,n_epochs,
+                                                                                                          k,N_val_batches,
+                                                                                                          k+N_train_batches,len(temp_shuffled_batches),
+                                                                                                          np.sqrt(np.mean(square_error_a,axis=0)),
+                                                                                                          np.sqrt(np.mean(square_error_v,axis=0))))
+                        realvals={}
+                        for i in id_variables.keys():
+                            realvals[i]=prepare_dict(id_variables,k)[i]*scalers[i] if ('vw' not in i) else id_variables[i][0]*scalers[i]
+                            
+                        if write_this_step:
+                            saver(name="epoch_%i_batch_%i"%(n,k+N_train_batches),save_path=spath,
+                              id_variables=realvals,
+                              train_sc_a=train_sc_a,
+                              train_sc_v=train_sc_v,
+                              val_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
+                              val_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
+                              total_sc_a=total_sc_a,
+                              total_sc_v=total_sc_v)
         
-                    save_indexes=np.arange(0,N_val_batches,max(1,N_val_batches//10))
-                    write_this_step=(k in save_indexes) or ns=='all'
-
-                    acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables,scalers)
-                    
-                    val_sc_a+=np.mean(square_error_a,axis=0)
-                    val_sc_v+=np.mean(square_error_v ,axis=0)   
-                    print(" %s --- EPOCH : %i/%i || Eval batch : %i/%i || PROGRESS: %i/%i [va,vv]=[%f,%f]"%(log_name,
-                                                                                                      n,n_epochs,
-                                                                                                      k,N_val_batches,
-                                                                                                      k+N_train_batches,len(temp_shuffled_batches),
-                                                                                                      np.sqrt(np.mean(square_error_a,axis=0)),
-                                                                                                      np.sqrt(np.mean(square_error_v,axis=0))))
-                    realvals={}
-                    for i in id_variables.keys():
-                        realvals[i]=prepare_dict(id_variables,k)[i]*scalers[i] if ('vw' not in i) else id_variables[i][0]*scalers[i]
-                        
-                    if write_this_step:
-                        saver(name="epoch_%i_batch_%i"%(n,k+N_train_batches),save_path=spath,
-                          id_variables=realvals,
-                          train_sc_a=train_sc_a,
-                          train_sc_v=train_sc_v,
-                          val_sc_a=np.sqrt(np.mean(square_error_a,axis=0)),
-                          val_sc_v=np.sqrt(np.mean(square_error_v,axis=0)),
-                          total_sc_a=total_sc_a,
-                          total_sc_v=total_sc_v)
-    
-                        if wind_signal:
-                            windsave_df=pd.DataFrame(data=np.array([id_variables['vw_i'],id_variables['vw_j']]).T,columns=['w_i','w_j'])
-                            nsave="WINDSIG_epoch_%i_batch_%i"%(n,k)+".csv"
-                            windsave_df.to_csv(os.path.join(spath,nsave))
-                        gc.collect()
-                        
-            if N_val_batches!=0:
-                val_sc_a/=N_val_batches
-                val_sc_v/=N_val_batches
-    
-            acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(data_prepared,id_variables,scalers)
-            total_sc_a=np.sqrt(np.mean(square_error_a,axis=0))
-            total_sc_v=np.sqrt(np.mean(square_error_v ,axis=0))
-            
-            realvals={}
-            for i in id_variables.keys():
-                realvals[i]=prepare_dict(id_variables,0)[i]*scalers[i] if ('vw' not in i) else id_variables[i][0]*scalers[i]
-    
-            print('\n###################################')
-            print('############# END EPOCH ###########')
-            print("id_variables=",realvals,
-                  "train_sc_a=",train_sc_a,
-                  "train_sc_v=",train_sc_v,
-                  "val_sc_a=",val_sc_a,
-                  "val_sc_v=",val_sc_v,
-                  "total_sc_a=",total_sc_a,
-                  "total_sc_v=",total_sc_v,)
-            print('###################################\n')
-    
-            saver(name="epoch_%i"%(n),save_path=spath,
-                  id_variables=realvals,
-                  train_sc_a=train_sc_a,
-                  train_sc_v=train_sc_v,
-                  val_sc_a=val_sc_a,
-                  val_sc_v=val_sc_v,
-                  total_sc_a=total_sc_a,
-                  total_sc_v=total_sc_v)
-            
-            if wind_signal:
-                windsave_df=pd.DataFrame(data=np.array([id_variables['vw_i'],id_variables['vw_j']]).T,columns=['w_i','w_j'])
-                nsave="WINDSIG_epoch_%i"%(n)+".csv"
-                windsave_df.to_csv(os.path.join(spath,nsave))
-        return 0 
-          
-    train_loop(data_batches,id_variables,n_epochs=n_epochs)
-    
-    return 0
+                            if wind_signal:
+                                windsave_df=pd.DataFrame(data=np.array([id_variables['vw_i'],id_variables['vw_j']]).T,columns=['w_i','w_j'])
+                                nsave="WINDSIG_epoch_%i_batch_%i"%(n,k)+".csv"
+                                windsave_df.to_csv(os.path.join(spath,nsave))
+                            gc.collect()
+                            
+                if N_val_batches!=0:
+                    val_sc_a/=N_val_batches
+                    val_sc_v/=N_val_batches
+        
+                acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(data_prepared,id_variables,scalers)
+                total_sc_a=np.sqrt(np.mean(square_error_a,axis=0))
+                total_sc_v=np.sqrt(np.mean(square_error_v ,axis=0))
+                
+                realvals={}
+                for i in id_variables.keys():
+                    realvals[i]=prepare_dict(id_variables,0)[i]*scalers[i] if ('vw' not in i) else id_variables[i][0]*scalers[i]
+        
+                print('\n###################################')
+                print('############# END EPOCH ###########')
+                print("id_variables=",realvals,
+                      "train_sc_a=",train_sc_a,
+                      "train_sc_v=",train_sc_v,
+                      "val_sc_a=",val_sc_a,
+                      "val_sc_v=",val_sc_v,
+                      "total_sc_a=",total_sc_a,
+                      "total_sc_v=",total_sc_v,)
+                print('###################################\n')
+        
+                saver(name="epoch_%i"%(n),save_path=spath,
+                      id_variables=realvals,
+                      train_sc_a=train_sc_a,
+                      train_sc_v=train_sc_v,
+                      val_sc_a=val_sc_a,
+                      val_sc_v=val_sc_v,
+                      total_sc_a=total_sc_a,
+                      total_sc_v=total_sc_v)
+                
+                if wind_signal:
+                    windsave_df=pd.DataFrame(data=np.array([id_variables['vw_i'],id_variables['vw_j']]).T,columns=['w_i','w_j'])
+                    nsave="WINDSIG_epoch_%i"%(n)+".csv"
+                    windsave_df.to_csv(os.path.join(spath,nsave))
+            return 0 
+              
+        train_loop(data_batches,id_variables,n_epochs=n_epochs)
+        
+        return 0
 
 from multiprocessing import Pool
 
