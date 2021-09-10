@@ -106,7 +106,7 @@ def main_func(x):
     coeff_drag_shift_0= 0.5 
     coeff_lift_shift_0= 0.05 
     coeff_lift_gain_0= 2.5
-    C_t = 1.1e-4
+    C_t0 = 1.1e-4
     C_q = 1e-8
     C_h = 1e-4
     
@@ -128,7 +128,8 @@ def main_func(x):
     coeff_lift_shift_0,
     coeff_lift_gain_0,
     vwi0,
-    vwj0]
+    vwj0,
+    C_t0]
     
     
     # Bounds and scaling factors
@@ -146,7 +147,8 @@ def main_func(x):
     bounds['coeff_lift_gain']=(0,np.inf)
     bounds['vw_i']=(-15,15)
     bounds['vw_j']=(-15,15)
-    
+    bounds['Ct']=(0,1)
+
     "scaler corresponds roughly to the power of ten of the parameter"
     "it does not have to though, it may be used to improve the grad descent"
     
@@ -361,7 +363,7 @@ def main_func(x):
                       "vw_k":vwk0,
                       "alpha_stall":alpha_s,
                       "largeur_stall":delta_s,
-                      "Ct": C_t, 
+                      "Ct": C_t0, 
                       "Cq": C_q, 
                       "Ch": C_h
                       }
@@ -369,7 +371,7 @@ def main_func(x):
     for key_ in ('cd0sa','cd0fp',
                  'cd1sa','cl1sa','cd1fp',
                  'coeff_drag_shift','coeff_lift_shift',
-                 'coeff_lift_gain'):
+                 'coeff_lift_gain','Ct'):
         id_variables[key_]=non_id_variables[key_]
     
     if id_mass:
@@ -465,7 +467,8 @@ def main_func(x):
         coeff_drag_shift=non_id_variables['coeff_drag_shift'] if 'coeff_drag_shift' in non_id_variables else id_variables['coeff_drag_shift']
         coeff_lift_shift=non_id_variables['coeff_lift_shift'] if 'coeff_lift_shift' in non_id_variables else id_variables['coeff_lift_shift']
         coeff_lift_gain=non_id_variables['coeff_lift_gain'] if 'coeff_lift_gain' in non_id_variables else id_variables['coeff_lift_gain']
-        
+        C_t=non_id_variables['Ct'] if 'Ct' in non_id_variables else id_variables['Ct']
+
         R=tf3d.quaternions.quat2mat(np.array([batch['q[%i]'%(j)][i] for j in range(4)]))
         R_list =[R,R,Rotation(R,45),Rotation(R,-45),R]
 
@@ -491,9 +494,10 @@ def main_func(x):
             VelinLDPlane   = function_moteur_physique[0](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
             dragDirection  = function_moteur_physique[1](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
             liftDirection  = function_moteur_physique[2](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
-            alpha_list[p] = -function_moteur_physique[3](dragDirection, liftDirection, np.array([[1],[0],[0]]).flatten(), VelinLDPlane,R)
-        
-       
+
+            alpha_list[p] = function_moteur_physique[3](dragDirection, liftDirection, np.array([1,0,0]), VelinLDPlane)
+
+            
         X=(alog.flatten(),v_log.flatten(),dt, Aire_list, Omega.flatten(), R.flatten(), v_pred.flatten(), v_W.flatten(), cp_list, alpha_list, alpha_0, \
            alpha_s, delta0_list.flatten(), delta_s, cl1sa, cd1fp, coeff_drag_shift, coeff_lift_shift, coeff_lift_gain,\
                cd0fp, cd0sa, cd1sa, C_t, C_q, C_h, omega_rotor, g.flatten(), m)
@@ -964,10 +968,10 @@ from multiprocessing import Pool
 
 if __name__ == '__main__':
     
-    blr_range=[0.5*10**i for i in range(0,-5,-5)]
+    blr_range=[0.5*10**i for i in range(-6,-5,1)]
 
     
-    ns_range=[-1]
+    ns_range=[0.5]
 
     fit_arg_range=[True]
 
@@ -987,16 +991,16 @@ if __name__ == '__main__':
     
     print(x_r,len(x_r))
 
-    # pool = Pool(processes=len(x_r))
-    # alidhali=input('LAUNCH ? ... \n >>>>')
-    # pool.map(main_func, x_r)
-blr_range=[0.5*10**i for i in range(0,-5,-5)]
+    pool = Pool(processes=len(x_r))
+    alidhali=input('LAUNCH ? ... \n >>>>')
+    pool.map(main_func, x_r)
+# blr_range=[0.5*10**i for i in range(0,-5,-5)]
 
 
-ns_range=[-1]
+# ns_range=[1]
 
-fit_arg_range=[True]
+# fit_arg_range=[True]
 
-x_r=[[i,j,k] for j in blr_range for i in  fit_arg_range  for k in ns_range ]
-print(x_r,len(x_r))
-main_func(x_r[0])
+# x_r=[[i,j,k] for j in blr_range for i in  fit_arg_range  for k in ns_range ]
+# print(x_r,len(x_r))
+    # main_func(x_r[0])

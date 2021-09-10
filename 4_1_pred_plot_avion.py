@@ -81,9 +81,9 @@ vwk0=0.0
 alpha_0=0.07
 alpha_s = 0.3391428111
 delta_s = 15.0*np.pi/180
-cd0sa_0 = 0.010
+cd0sa_0 = 0.9
 cd0fp_0 = 0.010
-cd1sa_0 = 4.55 
+cd1sa_0 = 2
 cl1sa_0 = 5 
 cd1fp_0 = 2.5 
 coeff_drag_shift_0= 0.5 
@@ -466,9 +466,8 @@ def arg_wrapping(batch,id_variables,data_index,speed_pred_previous):
         VelinLDPlane   = function_moteur_physique[0](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
         dragDirection  = function_moteur_physique[1](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
         liftDirection  = function_moteur_physique[2](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
-        alpha_list[p] = -function_moteur_physique[3](dragDirection, liftDirection, np.array([[1],[0],[0]]).flatten(), VelinLDPlane, R)
-    
-       
+        alpha_list[p] = -function_moteur_physique[3](dragDirection, liftDirection, np.array([[1],[0],[0]]).flatten(), VelinLDPlane)
+
     X=(alog.flatten(),v_log.flatten(),dt, Aire_list, Omega.flatten(), R.flatten(), v_pred.flatten(), v_W.flatten(), cp_list, alpha_list, alpha_0, \
        alpha_s, delta0_list.flatten(), delta_s, cl1sa, cd1fp, coeff_drag_shift, coeff_lift_shift, coeff_lift_gain,\
            cd0fp, cd0sa, cd1sa, C_t, C_q, C_h, omega_rotor, g.flatten(), m)
