@@ -233,7 +233,7 @@ def main_func(x):
     
     def Rotation(R,angle):
         c, s = np.cos(angle*np.pi/180), np.sin(angle*np.pi/180)
-        r = np.array([[1,0, 0], [0,c, s],[0,-s, c]] , dtype=np.float)
+        r = np.array([[1,0, 0], [0,c, -s],[0,s, c]] , dtype=np.float)
         return R @ r
     #CI DESSOUS : on spécifie quelles variables sont les variables d'identif
    
@@ -314,9 +314,13 @@ def main_func(x):
     
     
     
-    for i in range(6):
-        data_prepared['omega_c[%i]'%(i+1)]=(data_prepared['PWM_motor[%i]'%(i+1)]-pwmmin)/(pwmmax-pwmmin)*U_batt*kv_motor*2*np.pi/60
+    def scale_to_01(df):
         
+        return (df-df.min())/(df.max()-df.min())
+    
+    for i in range(6):
+        data_prepared['omega_c[%i]'%(i+1)]=scale_to_01(data_prepared['PWM_motor[%i]'%(i+1)])*925.0
+
     "splitting the dataset into nsecs sec minibatches"
     
     print("SPLIT DATA...")
@@ -370,7 +374,7 @@ def main_func(x):
     for key_ in ('cd0sa','cd0fp',
                  'cd1sa','cl1sa','cd1fp',
                  'coeff_drag_shift','coeff_lift_shift',
-                 'coeff_lift_gain','Ct'):
+                 'coeff_lift_gain'):
         id_variables[key_]=non_id_variables[key_]
     
     if id_mass:
@@ -924,7 +928,7 @@ def main_func(x):
                 val_sc_a/=N_val_batches
                 val_sc_v/=N_val_batches
     
-            acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(data_prepared,id_variables,scalers)
+            acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(data_prepared,id_variables)
             total_sc_a=np.sqrt(np.mean(square_error_a,axis=0))
             total_sc_v=np.sqrt(np.mean(square_error_v ,axis=0))
             
@@ -966,12 +970,12 @@ from multiprocessing import Pool
 
 if __name__ == '__main__':
     
-    blr_range=[0.5*10**i for i in range(-6,-5,1)]
+    blr_range=[0.5*10**i for i in range(-6,1,1)]
 
     
-    ns_range=[0.5]
+    ns_range=[1.0]
 
-    fit_arg_range=[True]
+    fit_arg_range=[False]
 
     x_r=[[i,j,k] for j in blr_range for i in  fit_arg_range  for k in ns_range ]
 

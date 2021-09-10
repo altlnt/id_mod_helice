@@ -218,7 +218,7 @@ bounds['vw_j']=(-15,15)
 
 def Rotation(R,angle):
     c, s = np.cos(angle*np.pi/180), np.sin(angle*np.pi/180)
-    r = np.array([[1,0, 0], [0,c, s],[0,-s, c]] , dtype=np.float)
+    r = np.array([[1,0, 0], [0,c, -s],[0,s, c]] , dtype=np.float)
     return R @ r
 #CI DESSOUS : on spécifie quelles variables sont les variables d'identif
    
