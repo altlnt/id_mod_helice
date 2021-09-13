@@ -315,12 +315,10 @@ def main_func(x):
     
     
     def scale_to_01(df):
-        
+
         return (df-df.min())/(df.max()-df.min())
     
-    for i in range(6):
-        data_prepared['omega_c[%i]'%(i+1)]=scale_to_01(data_prepared['PWM_motor[%i]'%(i+1)])*925.0
-
+    data_prepared['omega_c[5]']=(data_prepared['PWM_motor[5]']-1000)*925.0/1000
     "splitting the dataset into nsecs sec minibatches"
     
     print("SPLIT DATA...")
@@ -342,6 +340,7 @@ def main_func(x):
         N_val_batches=N_minibatches-N_train_batches
     print("DATA PROCESS DONE")
         
+    print(data_prepared["omega_c[5]"])
     
     # print("Importing model func...")
     # %%   ####### Identification Data Struct
@@ -472,9 +471,8 @@ def main_func(x):
         coeff_lift_gain=non_id_variables['coeff_lift_gain'] if 'coeff_lift_gain' in non_id_variables else id_variables['coeff_lift_gain']
         C_t=non_id_variables['Ct'] if 'Ct' in non_id_variables else id_variables['Ct']
 
-        
         R=tf3d.quaternions.quat2mat(np.array([batch['q[%i]'%(j)][i] for j in range(4)]))
-        R_list =[R,R,Rotation(R,45),Rotation(R,-45),R]
+        R_list =[R,R,Rotation(R,-45),Rotation(R,-135),R]
         
         
         "reverse mixing"
@@ -498,16 +496,15 @@ def main_func(x):
             VelinLDPlane   = function_moteur_physique[0](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
             dragDirection  = function_moteur_physique[1](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
             liftDirection  = function_moteur_physique[2](Omega, cp, v_pred.flatten(), v_W.flatten(), R_list[p].flatten())
-            alpha_list[p] = -function_moteur_physique[3](dragDirection, liftDirection, np.array([[1],[0],[0]]).flatten(), VelinLDPlane)
+            alpha_list[p] =  -function_moteur_physique[3](dragDirection, liftDirection, np.array([[1],[0],[0]]).flatten(), VelinLDPlane)
     
         X=(alog.flatten(),v_log.flatten(),dt, Aire_list, Omega.flatten(), R.flatten(), v_pred.flatten(), v_W.flatten(), cp_list, alpha_list, alpha_0, \
            alpha_s, delta0_list.flatten(), delta_s, cl1sa, cd1fp, coeff_drag_shift, coeff_lift_shift, coeff_lift_gain,\
                cd0fp, cd0sa, cd1sa, C_t, C_q, C_h, omega_rotor, g.flatten(), m)
-        
+        # print(X)
         return X
-
-   
     
+
     def pred_on_batch(batch,id_variables):
         
         "si n est la taille du batch"
@@ -551,12 +548,8 @@ def main_func(x):
         
         return acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v
     
-        
-        # %%   Gradient
-        import random
-        
-    
-        
+       
+            
     def X_to_dict(X,base_dict=id_variables):
             
             "sert à transformer un vecteur en dictionnaire "
@@ -674,7 +667,7 @@ def main_func(x):
                 del(windsave_df)
             
             return C,J
-        
+            
     # %% Train loop
     from scipy.optimize import minimize
     import random
@@ -723,7 +716,6 @@ def main_func(x):
         for n in range(n_epochs):
             "begin epoch"
             
-            
             "train score correspond au score sur le dataset de d'entrainement"
             "val score correspond au score sur le dataset de validation "
             "total score correspond au score sur la totalité du dataset"
@@ -770,7 +762,6 @@ def main_func(x):
 
                     new_id_variables=propagate_gradient(jac_error_v if fit_on_v else jac_error_a,temp_id_variables)
 
-
                     if wind_signal:
                         for key_ in ('vw_i','vw_j'):
                             tparr=id_variables[key_]
@@ -785,11 +776,11 @@ def main_func(x):
                     train_sc_a+=np.sqrt(np.mean(square_error_a,axis=0))
                     train_sc_v+=np.sqrt(np.mean(square_error_v,axis=0))
                     print(" %s --- EPOCH : %i/%i || Train batch : %i/%i || PROGRESS: %i/%i [ta,tv]=[%f,%f]"%(log_name,n,
-                                                                                                      n_epochs,
-                                                                                                      k,N_train_batches,
-                                                                                                      k,len(temp_shuffled_batches),
-                                                                                                      np.sqrt(np.mean(square_error_a,axis=0)),
-                                                                                                      np.sqrt(np.mean(square_error_v,axis=0))))
+                                                                        n_epochs,
+                                                                        k,N_train_batches,
+                                                                        k,len(temp_shuffled_batches),
+                                                                        np.sqrt(np.mean(square_error_a,axis=0)),
+                                                                        np.sqrt(np.mean(square_error_v,axis=0))))
                     
                     realvals={}
                     for i in id_variables.keys():
@@ -895,7 +886,7 @@ def main_func(x):
                     write_this_step=(k in save_indexes) or ns=='all'
 
                     acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch_,id_variables)
-                    
+
                     val_sc_a+=np.mean(square_error_a,axis=0)
                     val_sc_v+=np.mean(square_error_v ,axis=0)   
                     print(" %s --- EPOCH : %i/%i || Eval batch : %i/%i || PROGRESS: %i/%i [va,vv]=[%f,%f]"%(log_name,
@@ -970,7 +961,7 @@ from multiprocessing import Pool
 
 if __name__ == '__main__':
     
-    blr_range=[0.5*10**i for i in range(-6,1,1)]
+    blr_range=[0.5*10**i for i in range(-6,1,7)]
 
     
     ns_range=[1.0]
