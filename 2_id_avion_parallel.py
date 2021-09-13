@@ -2,12 +2,14 @@
 import dill as dill
 import  numpy as np
 # %%   ####### PARAMETERS
-import sys
+# import sys
 import time
-from sympy import Symbol, Matrix, symbols, sin, lambdify
+# from sympy import Symbol, Matrix, symbols, sin, lambdify
 import gc 
-from collections import OrderedDict
+# from collections import OrderedDict
 import os 
+import pandas as pd
+
 
 "cette fonction est le main"
 "on utilise le multiprocessing pour tester plusieurs metaparamètres"
@@ -19,7 +21,7 @@ def main_func(x):
     # récupération des arguments
     fit_arg,blr,ns=x[0],x[1],x[2]
     
-    
+    bo=False
     # les booleans qui déterminent plusieurs comportements, voir coms     
 
     fit_on_v=fit_arg #est ce qu'on fit sur la vitesse prédite ou sur l'acc
@@ -199,9 +201,7 @@ def main_func(x):
     #on sauvegarde les paramètres de départ
     with open(os.path.join(spath,'data.json'), 'w') as fp:
         json.dump(metap, fp)
-    
-    import pandas as pd
-    
+        
     # la fonction saver va être utilisée souvent 
     
     def saver(name=None,save_path=os.path.join(os.getcwd(),"results_tests"),**kwargs):
@@ -237,11 +237,11 @@ def main_func(x):
         return R @ r
     #CI DESSOUS : on spécifie quelles variables sont les variables d'identif
    
-    model_func = dill.load(open('./.Funcs/model_func_'+str(used_logged_v_in_model),'rb'))[0]
-    function_moteur_physique=  dill.load(open('./.Funcs/model_func_'+str(used_logged_v_in_model),'rb'))[1]
+    model_func = dill.load(open('./.Funcs/model_func_'+str(used_logged_v_in_model)+"simple_"+str(bo),'rb'))[0]
+    function_moteur_physique=  dill.load(open('./.Funcs/model_func_'+str(used_logged_v_in_model)+"simple_"+str(bo),'rb'))[1]
     # CI DESSOUS : on spécifie quelles variables sont les variables d'identif
     
-    t7=time.time()
+    # t7=time.time()
     
     "cleansing memory"
     
@@ -274,7 +274,6 @@ def main_func(x):
     # aux batches. 
     
     print("LOADING DATA...")
-    import pandas as pd
     
     raw_data=pd.read_csv(log_path)
     
