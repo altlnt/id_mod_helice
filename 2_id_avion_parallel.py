@@ -338,9 +338,7 @@ def main_func(x):
         N_train_batches=round(train_proportion*N_minibatches)
         N_val_batches=N_minibatches-N_train_batches
     print("DATA PROCESS DONE")
-        
-    print(data_prepared["omega_c[5]"])
-    
+            
     # print("Importing model func...")
     # %%   ####### Identification Data Struct
     
@@ -960,7 +958,7 @@ from multiprocessing import Pool
 
 if __name__ == '__main__':
     
-    blr_range=[0.5*10**i for i in range(-6,1,7)]
+    blr_range=[0.5*10**i for i in range(-3,1,7)]
 
     
     ns_range=[1.0]
