@@ -53,11 +53,7 @@ def plot_opti(opti_to_plot):
                     'used_logged_v_in_model',
                     'base_lr',
                     'nsecs',
-                    'vanilla_force_model',
-                    'structural_relation_idc1',
-                    'structural_relation_idc2',
-                    'assume_nul_wind',
-                    'di_equal_dj')
+                    'assume_nul_wind')
     
     for i in param_key_list:
         opti_params[i]=data[i]

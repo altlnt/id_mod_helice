@@ -1,7 +1,8 @@
 
 import numpy as np 
 import os 
-
+from numba import jit
+ 
 fit_arg,blr,ns=False,0.1,'all'
 
 log_path=os.path.join('./logs/avion/vol1/log_real_processed.csv')     
@@ -9,6 +10,7 @@ log_path=os.path.join('./logs/avion/vol1/log_real_processed.csv')
 
 fit_on_v=fit_arg #est ce qu'on fit sur la vitesse prédite ou sur l'acc
 used_logged_v_in_model=not fit_arg
+bo=False
 
 # si on utilise l'optimizer scipy, on passe 'scipy' en argument
 # sinon le learning rate de la descente de gradient est base_lr
@@ -215,7 +217,7 @@ bounds['vw_j']=(-15,15)
 " l'acc pred, la vitesse pred, l'erreur quad sur acc, l'erreur quad sur v"
 " la jacobienne de l'erreur quad sur l'acc et la vitesse "
 
-
+@jit(nogil=True)
 def Rotation(R,angle):
     c, s = np.cos(angle*np.pi/180), np.sin(angle*np.pi/180)
     r = np.array([[1,0, 0], [0,c, -s],[0,s, c]] , dtype=np.float)
@@ -223,8 +225,8 @@ def Rotation(R,angle):
 #CI DESSOUS : on spécifie quelles variables sont les variables d'identif
    
 import dill
-model_func = dill.load(open('./.Funcs/model_func_'+str(used_logged_v_in_model),'rb'))[0]
-function_moteur_physique=  dill.load(open('./.Funcs/model_func_'+str(used_logged_v_in_model),'rb'))[1]
+model_func = dill.load(open('./.Funcs/model_func_'+str(used_logged_v_in_model)+"simple_"+str(bo),'rb'))[0]
+function_moteur_physique=  dill.load(open('./.Funcs/model_func_'+str(used_logged_v_in_model)+"simple_"+str(bo),'rb'))[1]
 # CI DESSOUS : on spécifie quelles variables sont les variables d'identif
 import time
 t7=time.time()
@@ -380,7 +382,7 @@ for j in rem:
 
 import transforms3d as tf3d 
 # import copy 
-
+@jit(nogil=True)
 def arg_wrapping(batch,id_variables,data_index,speed_pred_previous):
     
     "cette fonction sert à fabriquer, à partir des inputs, l'argument que "
@@ -474,7 +476,7 @@ def arg_wrapping(batch,id_variables,data_index,speed_pred_previous):
     
     return X
 
-
+@jit(nogil=True)
 def pred_on_batch(batch,id_variables):
     
     "si n est la taille du batch"
@@ -504,7 +506,7 @@ def pred_on_batch(batch,id_variables):
         speed_pred_prev=speed_pred[i-1] if i>min(batch.index) else (batch['speed[0]'][i],batch['speed[1]'][i],batch['speed[2]'][i])
     
         X=arg_wrapping(batch,id_variables,i,speed_pred_prev)
-    
+
         Y=model_func(*X)
         # print(Y)
         acc_pred[i]=Y[:3].reshape(3,)

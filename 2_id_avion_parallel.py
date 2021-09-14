@@ -9,7 +9,7 @@ import gc
 # from collections import OrderedDict
 import os 
 import pandas as pd
-
+from numba import jit 
 
 "cette fonction est le main"
 "on utilise le multiprocessing pour tester plusieurs metaparamètres"
@@ -106,7 +106,7 @@ def main_func(x):
     coeff_drag_shift_0= 0.5 
     coeff_lift_shift_0= 0.05 
     coeff_lift_gain_0= 2.5
-    C_t0 = 1.1e-4
+    C_t = 1.1e-4
     C_q = 1e-8
     C_h = 1e-4
 
@@ -130,7 +130,7 @@ def main_func(x):
     coeff_lift_gain_0,
     vwi0,
     vwj0,
-    C_t0]
+    C_t]
     
     
     # Bounds and scaling factors
@@ -169,7 +169,7 @@ def main_func(x):
             "n_epochs":n_epochs,
             "nsecs":nsecs,
             "train_proportion":train_proportion,
-            "[mass,Area,r,rho,kv_motor,pwmmin,pwmmax,U_batt,b1,c10,c20,c30,ch10,ch20,di0,dj0,dk0,vwi0,vwj0,kt0]":physical_params,
+            "[mass,Area,r0,rho0,kv_motor,pwmmin,pwmmax,U_batt,cd0sa_0, cd0fp_0,cd1sa_0,cl1sa_0 ,cd1fp_0,coeff_drag_shift_0,coeff_lift_shift_0,coeff_lift_gain_0,vwi0vwj0,C_t0]":physical_params,
             "bounds":bounds}
     
     
@@ -309,7 +309,7 @@ def main_func(x):
     prep_data=prep_data.drop(index=[0,len(prep_data)-1])
     prep_data=prep_data.reset_index()
     
-    data_prepared=prep_data[:len(prep_data)//50]
+    data_prepared=prep_data[:len(prep_data)//20]
     
     
     
@@ -362,7 +362,7 @@ def main_func(x):
                       "vw_k":vwk0,
                       "alpha_stall":alpha_s,
                       "largeur_stall":delta_s,
-                      "Ct": C_t0, 
+                      "Ct": C_t, 
                       "Cq": C_q, 
                       "Ch": C_h
                       }
@@ -498,7 +498,7 @@ def main_func(x):
         X=(alog.flatten(),v_log.flatten(),dt, Aire_list, Omega.flatten(), R.flatten(), v_pred.flatten(), v_W.flatten(), cp_list, alpha_list, alpha_0, \
            alpha_s, delta0_list.flatten(), delta_s, cl1sa, cd1fp, coeff_drag_shift, coeff_lift_shift, coeff_lift_gain,\
                cd0fp, cd0sa, cd1sa, C_t, C_q, C_h, omega_rotor, g.flatten(), m)
-        # print(X)
+
         return X
     
 
@@ -533,7 +533,7 @@ def main_func(x):
             X=arg_wrapping(batch,id_variables,i,speed_pred_prev)
         
             Y=model_func(*X)
-            # print(Y)
+
             acc_pred[i]=Y[:3].reshape(3,)
             speed_pred[i]=Y[3:6].reshape(3,)
             square_error_a[i]=Y[6:7].reshape(1,)
@@ -958,7 +958,7 @@ from multiprocessing import Pool
 
 if __name__ == '__main__':
     
-    blr_range=[0.5*10**i for i in range(-3,1,7)]
+    blr_range=[0.5*10**i for i in range(-4,-3,1)]
 
     
     ns_range=[1.0]
