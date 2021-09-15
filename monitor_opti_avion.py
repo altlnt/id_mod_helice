@@ -16,7 +16,7 @@ import json
 base_path=os.path.join(os.getcwd(),"results")
 
 # %%  PLOT ONE OPTI
-opti_to_plot="3_SEPTEMBRE_fit_v_False_lr_0.0005_ns_1.0"
+opti_to_plot=" 3_SEPTEMBRE_fit_v_False_lr_0.0005_ns_1.0"
 
 def detect_nans(x,y):
     nx,ny=[],[]

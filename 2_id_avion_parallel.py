@@ -72,14 +72,14 @@ def main_func(x):
     
     Aire_1,Aire_2,Aire_3,Aire_4,Aire_5 =    0.62*0.262* 1.292 * 0.5,\
                                         0.62*0.262* 1.292 * 0.5, \
-                                        0.34*0.01* 1.292 * 0.5,\
+                                        0.34*0.1* 1.292 * 0.5,\
                                         0.34*0.1* 1.292 * 0.5, \
                                         1.08*0.31* 1.292 * 0.5
     Aire_list = [Aire_1,Aire_2,Aire_3,Aire_4,Aire_5]
     cp_1,cp_2,cp_3,cp_4,cp_5 = np.array([-0.013,0.475,-0.040],       dtype=float).flatten(), \
                             np.array([-0.013,-0.475,-0.040],      dtype=float).flatten(), \
-                            np.array([-1.006,0.85,-0.134],    dtype=float).flatten(),\
-                            np.array([-1.006,-0.85,-0.134],   dtype=float).flatten(),\
+                            np.array([-1.006,0.17,-0.134],    dtype=float).flatten(),\
+                            np.array([-1.006,-0.17,-0.134],   dtype=float).flatten(),\
                             np.array([0.021,0,-0.064],          dtype=float).flatten()
     cp_list=[cp_1,cp_2,cp_3,cp_4,cp_5]
     
@@ -958,7 +958,7 @@ from multiprocessing import Pool
 
 if __name__ == '__main__':
     
-    blr_range=[0.5*10**i for i in range(-4,-3,1)]
+    blr_range=[0.5*10**i for i in range(-3,-2,1)]
 
     
     ns_range=[1.0]
