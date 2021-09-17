@@ -429,7 +429,7 @@ def pwcolor(sol,col="red",tit=None,fm=False,fct=False):
     
 
     Xsol=sol['x']
-    acc_sol=dyn(df,Xsol)
+
     
     X0=Xsol*coeffs_0
     acc_sol=dyn(df,X0,fix_mass=fm,fix_ct=fct)
@@ -456,13 +456,13 @@ scipy_init_x=np.ones(len(coeffs_0))
 
 
 # sol=scipy.optimize.minimize(cost,scipy_init_x,args=("True","False"))
-# pwcolor(sol,"purple","fm","True","False")
+# pwcolor(sol,"purple","fm",True,False)
 
 # sol=scipy.optimize.minimize(cost,scipy_init_x,args=("False","True"))
-# pwcolor(sol,"green","fct","False","True")
+# pwcolor(sol,"green","fct",False,True)
 
 # sol=scipy.optimize.minimize(cost,scipy_init_x,args=("True","True"))
-# pwcolor(sol,"grey","both fixed","True","True")
+# pwcolor(sol,"grey","both fixed",True,True)
 
 # sol=scipy.optimize.minimize(cost,scipy_init_x,method="SLSQP")
 # pwcolor(sol,"red","slsqp")
@@ -529,6 +529,29 @@ coeffs_0_complex=np.ones(len(coeffs_0_complex))
 
 # %%% funcs
 
+def pwcolor_complex(sol,col="red",tit=None,fm=False,fct=False):
+
+    
+
+    Xsol=sol['x']
+    
+    X0=Xsol*coeffs_0_complex
+    acc_sol=dyn_complex(df,X0,fix_mass=fm,fix_ct=fct)
+    
+    print("SOL : ",X0)
+    print("PARAMS : ",col,tit)
+    
+    plt.figure()
+    if tit is not None and type(tit) is str:
+        plt.title(tit)
+    for i in range(1,4):
+        plt.gcf().add_subplot(3,1,i)
+        plt.plot(acc_log[:,i-1],label="log",color="black")
+        plt.plot(acc_sol[:,i-1],label="pred",color=col)
+        plt.legend(),plt.grid()
+    plt.draw_all(force=True)
+    return
+
 def dyn_complex(df=df,coeffs=coeffs_0,fix_mass=False,fix_ct=False):
     
     ct,\
@@ -593,8 +616,20 @@ def dyn_complex(df=df,coeffs=coeffs_0,fix_mass=False,fix_ct=False):
     
 
     puiss=5
-    s = - ((a+a_0)**2 @(np.diag(1.0/np.array([a_s,a_s,a_s,a_s_v,a_s_v])))**2)**puiss
-    s = s @ (((a+a_0)**2@(np.diag(1.0/np.array([a_s,a_s,a_s,a_s_v,a_s_v])))**2)**puiss+ 100+200* np.diag([ d_s,d_s,d_s,d_s_v,d_s_v]))
+    s = - ((a+a_0)**2 @(np.diag(1.0/np.array([a_s,
+                                              a_s,
+                                              a_s,
+                                              a_s_v,
+                                              a_s_v])))**2)**puiss
+    s = s @ (((a+a_0)**2@(np.diag(1.0/np.array([a_s,
+                                                a_s,
+                                                a_s,
+                                                a_s_v,
+                                                a_s_v])))**2)**puiss+ 100+200* np.diag([ d_s,
+                                                                                        d_s,
+                                                                                        d_s
+                                                                                        ,d_s_v,
+                                                                                        d_s_v]))
     s = s+1
 
 
@@ -625,48 +660,75 @@ def dyn_complex(df=df,coeffs=coeffs_0,fix_mass=False,fix_ct=False):
 
 acc_log=np.array([df['acc[%i]'%(i)] for i in range(3)]).T
 
-def cost_ext(X,fm=False,fct=False):
+def cost_ext(X,fm=False,fct=False,verbose=True):
     
     X0=X*coeffs_0_complex
     acc=dyn_complex(df,X0,fix_mass=fm,fix_ct=fct)
     c=np.mean(np.linalg.norm((acc-acc_log),axis=1))
-    # list_to_print=[i for i in X]+c
-    # print(str(list_to_print))
-    str_top_print="\r "
-    for i in X:
-        str_top_print=str_top_print+str(round(i,ndigits=5))+" |"
-    str_top_print=str_top_print+" "+str(round(c,ndigits=5))
-    
+
     res={}
     res['cost']=c
-    print(res)
+    print(res) if verbose else None
     return c
 
 scipy_init_x_complex=np.ones(len(coeffs_0_complex))
 
 # %%% Minimize
 
+def run(num=-1):
+    print("RUNNING .... ALGO  %i \n"%(num))
+    if num==1:
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        args=(True,True),method="SLSQP",options={"maxiter":350})
+        pwcolor_complex(sol,"purple","both fixed",fm=True,fct=True)
 
-# sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,args=("True","False"))
-# pwcolor(sol,"purple","fm","True","False")
+    if num==2:
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        args=(True,"False"),method="SLSQP",options={"maxiter":350})
+        pwcolor_complex(sol,"green","fct",fm=False,fct=True)
 
-# sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,args=("False","True"))
-# pwcolor(sol,"green","fct","False","True")
-
-# sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,args=("True","True"))
-# pwcolor(sol,"grey","both fixed","True","True")
-
-# sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,method="SLSQP")
-# pwcolor(sol,"red","slsqp")
-
-sol=optimize.minimize(cost_ext,scipy_init_x_complex)
-pwcolor(sol,"blue"," ")
-
-
-
+    if num==3:
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        args=("False",True),method="SLSQP",options={"maxiter":350})
+        pwcolor_complex(sol,"grey","fm",fm=True,fct=False)
 
 
+    if num==4:
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        method="L-BFGS-B",options={"maxiter":200})
+        pwcolor_complex(sol,"red","slsqp")
 
+
+    if num==5:
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        method="SLSQP",options={"maxiter":350})
+        pwcolor_complex(sol,"orange","slsqp")
+
+
+    if num==6:
+        sol=optimize.minimize(cost_ext,scipy_init_x_complex,
+        options={"maxiter":350})
+        pwcolor_complex(sol,"blue"," ")
+
+
+    if num==7:
+        sol=optimize.minimize(cost_ext,scipy_init_x_complex,
+        method="Nelder-Mead", options={"maxiter":350})
+        pwcolor_complex(sol,"blue"," ")
+        print(num,sol)
+    print("\n #################################\nN %i"%(num),"\n",sol)
+    return True
+
+# from multiprocessing import Pool
+
+# if __name__ == '__main__':
+#     x_r=range(1,8)
+#     pool = Pool(processes=len(x_r))
+#     alidhali=input('LAUNCH ? ... \n >>>>')
+#     pool.map(run, x_r)
+
+
+run(int(input('LAUNCH ? ... \n >>>>')))
 
 
 
