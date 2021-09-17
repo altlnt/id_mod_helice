@@ -510,20 +510,18 @@ coeffs_0_complex=np.array([ct,
                    a_s,
                    d_s, 
                    cl1sa, 
-                   cd1fp, 
-                   k0, k1, k2, 
                    cl1fp,
-                   cd0fp, 
-                   cd0sa, cd1sa, cd1fp,
+                   k0, k1, k2, 
+                   cd0fp, cd0sa, 
+                   cd1sa, cd1fp,
                    a_0,
                    a_s,
                    d_s, 
                    cl1sa, 
-                   cd1fp, 
-                   k0, k1, k2, 
                    cl1fp,
-                   cd0fp, 
-                   cd0sa, cd1sa, cd1fp,
+                   k0, k1, k2, 
+                   cd0fp, cd0sa, 
+                   cd1sa, cd1fp,
                    m])
 
 
@@ -534,8 +532,8 @@ coeffs_0_complex=np.ones(len(coeffs_0_complex))
 def dyn_complex(df=df,coeffs=coeffs_0,fix_mass=False,fix_ct=False):
     
     ct,\
-    a_0, a_s, d_s, cl1sa, cd1fp, k0, k1, k2, cl1fp, cd0fp, cd0sa, cd1sa, cd1fp, \
-    a_0_v, a_s_v, d_s_v, cl1sa_v, cd1fp_v, k0_v, k1_v, k2_v, cl1fp_v, cd0fp_v, cd0sa_v, cd1sa_v, cd1fp_v, \
+    a_0, a_s, d_s, cl1sa, cl1fp, k0, k1, k2,  cd0fp, cd0sa, cd1sa, cd1fp, \
+    a_0_v, a_s_v, d_s_v, cl1sa_v, cl1fp_v, k0_v, k1_v, k2_v,  cd0fp_v, cd0sa_v, cd1sa_v, cd1fp_v, \
     m=coeffs
     
     ct= 2.0*1.1e-4 if fix_ct else ct
