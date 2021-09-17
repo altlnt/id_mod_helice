@@ -7,7 +7,8 @@ Created on Sat Aug  7 15:59:50 2021
 """
 import numpy as np
 import transforms3d as tf3d
-
+import scipy
+from scipy import optimize
 # mass=369 #batterie
 # mass+=1640-114 #corps-carton
 # mass/=1e3
@@ -155,6 +156,11 @@ def skew_to_x(S):
     SS=(S-S.T)/2
     return np.array([SS[1,0],SS[2,0],S[2,1]])
 
+def skew(x):
+    return np.array([[0,-x[2],x[1]],
+                     [x[2],0,-x[0]],
+                     [-x[1],x[0],0]])
+
 omegas=np.zeros((R_array.shape[0],3))
 omegas[1:]=[skew_to_x(j@(i.T)-np.eye(3)) for i,j in zip(R_array[:-1],R_array[1:])]
 omegas[:,0]=omegas[:,0]*1.0/df['dt']
@@ -170,10 +176,6 @@ def filtering(X,k=0.05):
     return np.array(Xnew)
 
 omegas_new=filtering(omegas)
-import matplotlib.pyplot as plt
-plt.plot(omegas)
-plt.plot(omegas_new)
-
 
 v_ned_array=np.array([df['speed[%i]'%(i)] for i in range(3)]).T
 
@@ -188,6 +190,9 @@ for i in range(3):
     df.insert(df.shape[1],
               'gamma[%i]'%(i),
               gamma_array[:,i])
+    df.insert(df.shape[1],
+              'omega[%i]'%(i),
+              omegas_new[:,i])
     
 dragdirs=np.zeros((v_body_array.shape[0],3,5))
 liftdirs=np.zeros((v_body_array.shape[0],3,5))
@@ -196,11 +201,11 @@ alphas=np.zeros((v_body_array.shape[0],1,5))
 for k,v_body in enumerate(v_body_array):
     
     
-    v_in_ldp=np.cross(crosswards,np.cross(v_body.flatten(),crosswards))
+    v_in_ldp=np.cross(crosswards,np.cross((v_body-np.cross(cp_list,omegas_new[k])),crosswards))
     
     dd=-v_in_ldp
     dd=dd.T@np.diag(1.0/(np.linalg.norm(dd,axis=1)+1e-8))
-    
+
     ld=np.cross(crosswards,v_in_ldp)
     ld=ld.T@np.diag(1.0/(np.linalg.norm(ld,axis=1)+1e-8))
               
@@ -309,6 +314,8 @@ coeffs_0=np.array([ct,
                    cd0fp, 
                    cd0sa, cd1sa,m])
 
+# %% OPTI SIMPLE
+# %%% usefuncs
 def dyn(df=df,coeffs=coeffs_0,fix_mass=False,fix_ct=False):
     
     ct,a_0, a_s, d_s, cl1sa, cd1fp, k0, k1, k2, cd0fp, cd0sa, cd1sa,m=coeffs
@@ -355,9 +362,6 @@ def dyn(df=df,coeffs=coeffs_0,fix_mass=False,fix_ct=False):
     
     return acc
 
-# coeffs_0=np.ones(13)
-
-
 
 acc_log=np.array([df['acc[%i]'%(i)] for i in range(3)]).T
 
@@ -383,8 +387,10 @@ def cost(X,fm=False,fct=False):
     return c
 
     
-import scipy.optimize
-# coeffs_0=np.ones(13)
+
+
+# %%% BOUNDS
+
 
 bounds_ct= (0.2e-4,6e-4) #1.1e-4/4 1.1e-4*4
 bounds_a_0= (-0.26,0.26) #15 deg
@@ -443,14 +449,17 @@ def pwcolor(sol,col="red",tit=None,fm=False,fct=False):
     return
 
 
-
+# %%% Minimize
 scipy_init_x=np.ones(len(coeffs_0))
+
+
+
 
 # sol=scipy.optimize.minimize(cost,scipy_init_x,args=("True","False"))
 # pwcolor(sol,"purple","fm","True","False")
 
-sol=scipy.optimize.minimize(cost,scipy_init_x,args=("False","True"))
-pwcolor(sol,"green","fct","False","True")
+# sol=scipy.optimize.minimize(cost,scipy_init_x,args=("False","True"))
+# pwcolor(sol,"green","fct","False","True")
 
 # sol=scipy.optimize.minimize(cost,scipy_init_x,args=("True","True"))
 # pwcolor(sol,"grey","both fixed","True","True")
@@ -460,3 +469,208 @@ pwcolor(sol,"green","fct","False","True")
 
 # sol=scipy.optimize.minimize(cost,scipy_init_x,)
 # pwcolor(sol,"blue"," ")
+
+
+
+
+# %% OPTI MULTICOEFFS
+
+alpha_0=0.07
+alpha_s = 0.3391428111
+delta_s = 15.0*np.pi/180
+cd0sa_0 = 0.9
+cd0fp_0 = 0.010
+cd1sa_0 = 2
+cl1sa_0 = 5 
+cd1fp_0 = 2.5 
+coeff_drag_shift_0= 0.5 
+coeff_lift_shift_0= 0.05 
+coeff_lift_gain_0= 2.5
+C_t0 = 1.1e-4
+C_q = 1e-8
+C_h = 1e-4
+
+ct = 1.1e-4
+a_0 =  0.07
+a_s =  0.3391
+d_s =  15.0*np.pi/180
+cl1sa = 5
+cd1fp = 2.5
+k0 = 0.1
+k1 = 0.1
+k2 = 0.1
+cd0fp =  1e-2
+cl1fp=5
+cd0sa = 0.3
+cd1sa = 1.0
+m= 8.5
+
+coeffs_0_complex=np.array([ct,
+                   a_0,
+                   a_s,
+                   d_s, 
+                   cl1sa, 
+                   cd1fp, 
+                   k0, k1, k2, 
+                   cl1fp,
+                   cd0fp, 
+                   cd0sa, cd1sa, cd1fp,
+                   a_0,
+                   a_s,
+                   d_s, 
+                   cl1sa, 
+                   cd1fp, 
+                   k0, k1, k2, 
+                   cl1fp,
+                   cd0fp, 
+                   cd0sa, cd1sa, cd1fp,
+                   m])
+
+
+coeffs_0_complex=np.ones(len(coeffs_0_complex))
+
+# %%% funcs
+
+def dyn_complex(df=df,coeffs=coeffs_0,fix_mass=False,fix_ct=False):
+    
+    ct,\
+    a_0, a_s, d_s, cl1sa, cd1fp, k0, k1, k2, cl1fp, cd0fp, cd0sa, cd1sa, cd1fp, \
+    a_0_v, a_s_v, d_s_v, cl1sa_v, cd1fp_v, k0_v, k1_v, k2_v, cl1fp_v, cd0fp_v, cd0sa_v, cd1sa_v, cd1fp_v, \
+    m=coeffs
+    
+    ct= 2.0*1.1e-4 if fix_ct else ct
+    m= 8.5 if fix_mass else m
+    
+    "compute aero coeffs "
+    
+    a=np.array([i for i in df['alphas']])
+    d_0=np.array([i for i in df['deltas']])
+    
+    a_0_arr=np.ones(d_0.shape)@np.diag([a_0,a_0,a_0,a_0_v,a_0_v])
+
+    k0d0=d_0@np.diag([k0,k0,k0,k0_v,k0_v])
+    k1d0=d_0@np.diag([k1,k1,k1,k1_v,k1_v])
+
+    
+    
+    CL_sa = 1/2  * np.sin(2*(a + (k1d0) + a_0_arr)) @ np.diag([cl1sa,
+                                                           cl1sa,
+                                                           cl1sa,
+                                                           cl1sa_v,
+                                                           cl1sa_v])
+    
+    CD_sa = np.ones(a.shape)@ np.diag([cd0sa,
+                                        cd0sa,
+                                        cd0sa,
+                                        cd0sa_v,
+                                        cd0sa_v])
+    
+    CD_sa = CD_sa + np.sin((a + (k0d0) + a_0_arr))**2 @ np.diag([cd1sa,
+                                                           cd1sa,
+                                                           cd1sa,
+                                                           cd1sa_v,
+                                                           cd1sa_v])
+    
+    
+    
+
+    CL_fp = 1/2  * np.sin(2*(a + (k1d0) + a_0_arr)) @ np.diag([cl1fp,
+                                                           cl1fp,
+                                                           cl1fp,
+                                                           cl1fp_v,
+                                                           cl1fp_v])
+    
+    CD_fp = np.ones(a.shape)@ np.diag([cd0fp,
+                                        cd0fp,
+                                        cd0fp,
+                                        cd0fp_v,
+                                        cd0fp_v])
+    
+    CD_fp = CD_fp + np.sin((a + (k0d0) + a_0_arr))**2 @ np.diag([cd1fp,
+                                                           cd1fp,
+                                                           cd1fp,
+                                                           cd1fp_v,
+                                                           cd1fp_v])
+    
+    
+
+    puiss=5
+    s = - ((a+a_0)**2 @(np.diag(1.0/np.array([a_s,a_s,a_s,a_s_v,a_s_v])))**2)**puiss
+    s = s @ (((a+a_0)**2@(np.diag(1.0/np.array([a_s,a_s,a_s,a_s_v,a_s_v])))**2)**puiss+ 100+200* np.diag([ d_s,d_s,d_s,d_s_v,d_s_v]))
+    s = s+1
+
+
+    C_L = CL_fp + s*(CL_sa - CL_fp) 
+    C_L = C_L + np.sin(d_0)@np.diag([k2,k2,k2,k2_v,k2_v])
+    C_D = CD_fp + s*(CD_sa - CD_fp)
+    
+    #C_L,C_D shape is (n_samples,1,n_surfaces)
+    
+    # lifts,drags
+    ld,dd=np.array([i for i in df['liftdirs']]),np.array([i for i in df['dragdirs']])
+    
+    lifts=C_L*ld    
+    drags=C_D*dd
+    
+    aeroforce_total=np.sum(lifts+drags,axis=2)
+    
+    # "compute thrust  "
+
+    T=ct*np.array([i for i in df['thrust_dir_ned']])
+    g=np.zeros(aeroforce_total.shape)
+    g[:,-1]+=9.81
+    forces_total=T+aeroforce_total+m*g
+    acc=forces_total/m
+    
+    return acc
+
+
+acc_log=np.array([df['acc[%i]'%(i)] for i in range(3)]).T
+
+def cost_ext(X,fm=False,fct=False):
+    
+    X0=X*coeffs_0_complex
+    acc=dyn_complex(df,X0,fix_mass=fm,fix_ct=fct)
+    c=np.mean(np.linalg.norm((acc-acc_log),axis=1))
+    # list_to_print=[i for i in X]+c
+    # print(str(list_to_print))
+    str_top_print="\r "
+    for i in X:
+        str_top_print=str_top_print+str(round(i,ndigits=5))+" |"
+    str_top_print=str_top_print+" "+str(round(c,ndigits=5))
+    
+    res={}
+    res['cost']=c
+    print(res)
+    return c
+
+scipy_init_x_complex=np.ones(len(coeffs_0_complex))
+
+# %%% Minimize
+
+
+# sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,args=("True","False"))
+# pwcolor(sol,"purple","fm","True","False")
+
+# sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,args=("False","True"))
+# pwcolor(sol,"green","fct","False","True")
+
+# sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,args=("True","True"))
+# pwcolor(sol,"grey","both fixed","True","True")
+
+# sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,method="SLSQP")
+# pwcolor(sol,"red","slsqp")
+
+sol=optimize.minimize(cost_ext,scipy_init_x_complex)
+pwcolor(sol,"blue"," ")
+
+
+
+
+
+
+
+
+
+
+
