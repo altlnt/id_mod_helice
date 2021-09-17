@@ -48,7 +48,7 @@ def main_func(x):
     
     # log_name désigne le nom des fichiers que l'on enregistrera
     # on customisera chaque fichier avec le numero de l'epoch et la timestamp
-    log_name="3_SEPTEMBRE_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
+    log_name="AVION_14_sept_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
 
     #                   CI DESSOUS LES PARAMETRES PROPRES AU MODELE
     
@@ -309,7 +309,7 @@ def main_func(x):
     prep_data=prep_data.drop(index=[0,len(prep_data)-1])
     prep_data=prep_data.reset_index()
     
-    data_prepared=prep_data[:len(prep_data)//50]
+    data_prepared=prep_data[:len(prep_data)]
     
     
     
@@ -620,7 +620,7 @@ def main_func(x):
     
             id_var=X_to_dict(X,base_dict=id_variables_base)
     
-            acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch,id_var,scalers)
+            acc_pred,speed_pred,square_error_a,square_error_v,jac_error_a,jac_error_v=pred_on_batch(batch,id_var)
             
             used_jac=jac_error_v if fit_on_v else jac_error_a
             used_err=square_error_v if fit_on_v else square_error_a
@@ -958,8 +958,8 @@ from multiprocessing import Pool
 
 if __name__ == '__main__':
     
-    blr_range=[0.5*10**i for i in range(-3,1,7)]
-
+    blr_range=[0.5*10**i for i in [-2]]
+    # blr_range=blr_range+['scipy']
     
     ns_range=[1.0]
 
