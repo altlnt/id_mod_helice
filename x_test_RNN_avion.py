@@ -81,17 +81,17 @@ copter_model=tf.keras.Sequential([keras.layers.Dense(13,activation="relu"),
     keras.layers.Dense(3,activation="tanh")])
 
 
-copter_model.compile(loss="mean_squared_error",
+plane_model.compile(loss="mean_squared_error",
               optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
                   metrics=[tf.keras.metrics.MeanSquaredError()])
 
 
 
-history = copter_model.fit(X_train, y_train, epochs=20,validation_data=(X_test,y_test)) 
+history = plane_model.fit(X_train, y_train, epochs=20,validation_data=(X_test,y_test)) 
 
     # %%% pred and plot
 
-acc_pred=copter_model.predict(X_train_full)                        
+acc_pred=plane_model.predict(X_train_full)                        
 
 
 

@@ -146,6 +146,14 @@ def train_model(vtype,lognmbr,optimizer="sgd",lr=1e-3):
     history_dict = history.history
     your_history_path="./tmp/history_%s_log%s_optim%s"%(vtype,lognmbr,optimizer)
     json.dump(history_dict, open(your_history_path, 'w'))
+    import shutil 
+    dir_name="./MLmodel/speedpred_%s_log%s_optim%s"%(vtype,lognmbr,optimizer)
+    try:
+        shutil.rmtree("./%s"%(dir_name))
+    except:
+        pass
+    os.makedirs("./%s"%(dir_name))
+    tf.saved_model.save(dyn_model,"./%s"%(dir_name))
     return True
 
 
@@ -154,26 +162,26 @@ lr_copt_adam=0.0001
 lr_avi_sgd=0.0005
 lr_avi_adam=0.00005
 
+
 # train_model('avion','1',optimizer="sgd",lr=lr_avi_sgd)
 # train_model('avion','2',optimizer="sgd",lr=lr_avi_sgd)
 
 # train_model('avion','3',optimizer="sgd",lr=lr_avi_sgd)
-# train_model('avion','123',optimizer="sgd",lr=lr_avi_sgd)
+train_model('avion','123',optimizer="sgd",lr=lr_avi_sgd)
 
 # train_model('copter','1',optimizer="sgd",lr=lr_copt_sgd)
 # train_model('copter','2',optimizer="sgd",lr=lr_copt_sgd)
 
-# train_model('copter','12',optimizer="sgd",lr=lr_copt_sgd)
+train_model('copter','12',optimizer="sgd",lr=lr_copt_sgd)
 
 
 # train_model('avion','1',optimizer="adam",lr=lr_avi_adam)
-
+# 
 # train_model('avion','2',optimizer="adam",lr=lr_avi_adam)
 # train_model('avion','3',optimizer="adam",lr=lr_avi_adam)
 
-# train_model('avion','123',optimizer="adam",lr=lr_avi_adam)
+train_model('avion','123',optimizer="adam",lr=lr_avi_adam)
 # train_model('copter','1',optimizer="adam",lr=lr_copt_adam)
 
-train_model('copter','2',optimizer="adam",lr=lr_copt_adam)
+# train_model('copter','2',optimizer="adam",lr=lr_copt_adam)
 train_model('copter','12',optimizer="adam",lr=lr_copt_adam)
-

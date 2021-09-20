@@ -27,7 +27,7 @@ from scipy import optimize
 import pandas as pd
 
 
-log_path="./logs/avion/vol2/log_real_processed.csv"
+log_path="./logs/avion/vol123/log_real_processed.csv"
 
 
     
@@ -196,7 +196,10 @@ for i in range(3):
     
 dragdirs=np.zeros((v_body_array.shape[0],3,5))
 liftdirs=np.zeros((v_body_array.shape[0],3,5))
+slipdirs=np.zeros((v_body_array.shape[0],3,5))
+
 alphas=np.zeros((v_body_array.shape[0],1,5))
+sideslips=np.zeros((v_body_array.shape[0],1,5))
 
 for k,v_body in enumerate(v_body_array):
     
@@ -209,17 +212,23 @@ for k,v_body in enumerate(v_body_array):
     ld=np.cross(crosswards,v_in_ldp)
     ld=ld.T@np.diag(1.0/(np.linalg.norm(ld,axis=1)+1e-8))
               
+    sd=-(v_body-np.cross(cp_list,omegas_new[k])-v_in_ldp)
+    sd=sd.T@np.diag(1.0/(np.linalg.norm(sd,axis=1)+1e-8))
+    
     dragdirs[k,:,:]=R_array[k]@(dd@np.diag(Aire_list)*np.linalg.norm(v_in_ldp)**2)
     liftdirs[k,:,:]=R_array[k]@(ld@np.diag(Aire_list)*np.linalg.norm(v_in_ldp)**2)
-        
+    slipdirs[k,:,:]=R_array[k]@(sd@np.diag(Aire_list)*np.linalg.norm(v_in_ldp)**2)
+    
     alphas_d=np.diag(v_in_ldp@(np.array(forwards).T))/(np.linalg.norm(v_in_ldp,axis=1)+1e-8)
     alphas_d=np.arccos(alphas_d)
     alphas_d=np.sign(np.diag(v_in_ldp@np.array(upwards).T))*alphas_d
     
-    # alphas_d=np.where(abs(alphas_d)>np.pi/2,alphas_d-np.sign(alphas_d)*np.pi,alphas_d)
-    
+    x=np.linalg.norm(v_in_ldp,axis=1)
+    y=np.linalg.norm(v_body-np.cross(cp_list,omegas_new[k])-v_in_ldp,axis=1)
+    sideslips_d=np.arctan2(y,x)
+        
     alphas[k,:,:]=alphas_d
-    
+    sideslips[k,:,:]=sideslips_d
 
     
 df.insert(df.shape[1],
@@ -229,10 +238,18 @@ df.insert(df.shape[1],
 df.insert(df.shape[1],
           'dragdirs',
           [i for i in dragdirs])     
+
+df.insert(df.shape[1],
+          'slipdirs',
+          [i for i in slipdirs])  
         
 df.insert(df.shape[1],
           'alphas',
           [i for i in alphas])    
+
+df.insert(df.shape[1],
+          'sideslips',
+          [i for i in sideslips])    
 
 df.insert(df.shape[1],
           'thrust_dir_ned',
@@ -471,9 +488,51 @@ scipy_init_x=np.ones(len(coeffs_0))
 # pwcolor(sol,"blue"," ")
 
 
+# import json
+
+
+    
+# def run_parallel(x):
+#         meth,fm,fc=x
+#         sol=scipy.optimize.minimize(cost,scipy_init_x,
+#         args=(fm,fc),method=meth,options={"maxiter":400})
+#         filename="SIMPLE_meth_"+str(meth)+"_fm_"+str(fm)+"_fc_"+str(fc)
+#         with open('./scipy_solve/%s.json'%(filename), 'w') as fp:
+#             json_dump={"cost":sol['fun'],"X":sol['x'].tolist()}
+#             json.dump(json_dump, fp)
+
+#         return
+    
+# from multiprocessing import Pool
+
+# if __name__ == '__main__':
+
+    
+
+#     meth_range=["SLSQP","L-BFGS-B"]   
+#     fm_range=[True,False]
+#     fc_range=[True,False]
+
+    
+#     x_r=[[i,j,k] for i in meth_range for j in  fm_range  for k in fc_range]
+
+  
+#     pool = Pool(processes=len(x_r))
+#     # alidhali=input('LAUNCH ? ... \n >>>>')
+#     pool.map(run_parallel, x_r)
+
+
+# run(int(input('LAUNCH ? ... \n >>>>')))
+
+
+
+
+
+print('DONE!')
 
 
 # %% OPTI MULTICOEFFS
+
 
 alpha_0=0.07
 alpha_s = 0.3391428111
@@ -500,6 +559,7 @@ k0 = 0.1
 k1 = 0.1
 k2 = 0.1
 cd0fp =  1e-2
+cs= 0.5
 cl1fp=5
 cd0sa = 0.3
 cd1sa = 1.0
@@ -512,6 +572,7 @@ coeffs_0_complex=np.array([ct,
                    cl1sa, 
                    cl1fp,
                    k0, k1, k2, 
+                   cs,
                    cd0fp, cd0sa, 
                    cd1sa, cd1fp,
                    a_0,
@@ -519,7 +580,8 @@ coeffs_0_complex=np.array([ct,
                    d_s, 
                    cl1sa, 
                    cl1fp,
-                   k0, k1, k2, 
+                   k0, k1, k2,
+                   cs,
                    cd0fp, cd0sa, 
                    cd1sa, cd1fp,
                    m])
@@ -529,14 +591,14 @@ coeffs_0_complex=np.ones(len(coeffs_0_complex))
 
 # %%% funcs
 
-def pwcolor_complex(sol,col="red",tit=None,fm=False,fct=False):
+def pwcolor_complex(sol,col="red",tit=None,fm=False,fct=False,noslip=False):
 
     
 
     Xsol=sol['x']
     
     X0=Xsol*coeffs_0_complex
-    acc_sol=dyn_complex(df,X0,fix_mass=fm,fix_ct=fct)
+    acc_sol=dyn_complex(df,X0,fix_mass=fm,fix_ct=fct,no_slip=noslip)
     
     print("SOL : ",X0)
     print("PARAMS : ",col,tit)
@@ -552,11 +614,11 @@ def pwcolor_complex(sol,col="red",tit=None,fm=False,fct=False):
     plt.draw_all(force=True)
     return
 
-def dyn_complex(df=df,coeffs=coeffs_0,fix_mass=False,fix_ct=False):
+def dyn_complex(df=df,coeffs=coeffs_0_complex,fix_mass=False,fix_ct=False,no_slip=False):
     
     ct,\
-    a_0, a_s, d_s, cl1sa, cl1fp, k0, k1, k2,  cd0fp, cd0sa, cd1sa, cd1fp, \
-    a_0_v, a_s_v, d_s_v, cl1sa_v, cl1fp_v, k0_v, k1_v, k2_v,  cd0fp_v, cd0sa_v, cd1sa_v, cd1fp_v, \
+    a_0, a_s, d_s, cl1sa, cl1fp, k0, k1, k2, cs, cd0fp, cd0sa, cd1sa, cd1fp, \
+    a_0_v, a_s_v, d_s_v, cl1sa_v, cl1fp_v, k0_v, k1_v, k2_v, cs_v, cd0fp_v, cd0sa_v, cd1sa_v, cd1fp_v, \
     m=coeffs
     
     ct= 2.0*1.1e-4 if fix_ct else ct
@@ -565,6 +627,7 @@ def dyn_complex(df=df,coeffs=coeffs_0,fix_mass=False,fix_ct=False):
     "compute aero coeffs "
     
     a=np.array([i for i in df['alphas']])
+    sideslip=np.array([i for i in df['sideslips']])
     d_0=np.array([i for i in df['deltas']])
     
     a_0_arr=np.ones(d_0.shape)@np.diag([a_0,a_0,a_0,a_0_v,a_0_v])
@@ -636,17 +699,18 @@ def dyn_complex(df=df,coeffs=coeffs_0,fix_mass=False,fix_ct=False):
     C_L = CL_fp + s*(CL_sa - CL_fp) 
     C_L = C_L + np.sin(d_0)@np.diag([k2,k2,k2,k2_v,k2_v])
     C_D = CD_fp + s*(CD_sa - CD_fp)
-    
+    C_S =np.sin(sideslip)@np.diag([cs,cs,cs,cs_v,cs_v])
     #C_L,C_D shape is (n_samples,1,n_surfaces)
     
     # lifts,drags
     ld,dd=np.array([i for i in df['liftdirs']]),np.array([i for i in df['dragdirs']])
+    sd=np.array([i for i in df['sideslips']])
     
     lifts=C_L*ld    
     drags=C_D*dd
-    
-    aeroforce_total=np.sum(lifts+drags,axis=2)
-    
+    sweep=C_S*sd
+    # aeroforce_total=np.sum(lifts+drags,axis=2)
+    aeroforce_total=np.sum(lifts+drags,axis=2)  if no_slip else  np.sum(lifts+drags+sweep,axis=2) 
     # "compute thrust  "
 
     T=ct*np.array([i for i in df['thrust_dir_ned']])
@@ -660,15 +724,15 @@ def dyn_complex(df=df,coeffs=coeffs_0,fix_mass=False,fix_ct=False):
 
 acc_log=np.array([df['acc[%i]'%(i)] for i in range(3)]).T
 
-def cost_ext(X,fm=False,fct=False,verbose=True):
+def cost_ext(X,fm=False,fct=False,no_slip=False,verbose=True):
     
     X0=X*coeffs_0_complex
-    acc=dyn_complex(df,X0,fix_mass=fm,fix_ct=fct)
+    acc=dyn_complex(df,X0,fix_mass=fm,fix_ct=fct,no_slip=no_slip)
     c=np.mean(np.linalg.norm((acc-acc_log),axis=1))
 
-    res={}
-    res['cost']=c
-    print(res) if verbose else None
+#     res={}
+#     res['cost']=c
+#     print(res) if verbose else None
     return c
 
 scipy_init_x_complex=np.ones(len(coeffs_0_complex))
@@ -676,59 +740,126 @@ scipy_init_x_complex=np.ones(len(coeffs_0_complex))
 # %%% Minimize
 
 def run(num=-1):
+    
     print("RUNNING .... ALGO  %i \n"%(num))
+    
     if num==1:
         sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=(True,True),method="SLSQP",options={"maxiter":350})
-        pwcolor_complex(sol,"purple","both fixed",fm=True,fct=True)
+        args=(True,True),method="SLSQP",options={"maxiter":400})
+        pwcolor_complex(sol,"purple","slsqp both fixed",fm=True,fct=True)
 
     if num==2:
         sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=(True,"False"),method="SLSQP",options={"maxiter":350})
-        pwcolor_complex(sol,"green","fct",fm=False,fct=True)
+        args=(True,False),method="SLSQP",options={"maxiter":400})
+        pwcolor_complex(sol,"green","fm slsqp",fm=True,fct=False)
 
     if num==3:
         sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=("False",True),method="SLSQP",options={"maxiter":350})
-        pwcolor_complex(sol,"grey","fm",fm=True,fct=False)
-
-
+        args=(False,True),method="SLSQP",options={"maxiter":400})
+        pwcolor_complex(sol,"grey","fct slsqp",fm=False,fct=True)
+        
     if num==4:
         sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        method="L-BFGS-B",options={"maxiter":200})
-        pwcolor_complex(sol,"red","slsqp")
-
-
+        method="SLSQP",options={"maxiter":400})
+        pwcolor_complex(sol,"orange","slsqp",fm=False,fct=False)
+        
     if num==5:
         sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        method="SLSQP",options={"maxiter":350})
-        pwcolor_complex(sol,"orange","slsqp")
-
+        args=(True,True),method="L-BFGS-B",options={"maxiter":400})
+        pwcolor_complex(sol,"cyan","bfgs both fixed",fm=True,fct=True)
 
     if num==6:
-        sol=optimize.minimize(cost_ext,scipy_init_x_complex,
-        options={"maxiter":350})
-        pwcolor_complex(sol,"blue"," ")
-
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        args=(True,False),method="L-BFGS-B",options={"maxiter":400})
+        pwcolor_complex(sol,"brown","fm bfgs",fm=True,fct=False)
 
     if num==7:
-        sol=optimize.minimize(cost_ext,scipy_init_x_complex,
-        method="Nelder-Mead", options={"maxiter":350})
-        pwcolor_complex(sol,"blue"," ")
-        print(num,sol)
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        args=(False,True),method="L-BFGS-B",options={"maxiter":400})
+        pwcolor_complex(sol,"pink","fct bfgs",fm=False,fct=True)
+
+    if num==8:
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        method="L-BFGS-B",options={"maxiter":400})
+        pwcolor_complex(sol,"red","bfgs",fm=False,fct=False)
+
+    if num==9:
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        args=(True,True),method="SLSQP",options={"maxiter":400})
+        pwcolor_complex(sol,"purple","slsqp both fixed",fm=True,fct=True)
+
+    if num==10:
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        args=(True,False),method="SLSQP",options={"maxiter":400})
+        pwcolor_complex(sol,"green","fm slsqp",fm=True,fct=False)
+
+    if num==11:
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        args=(False,True),method="SLSQP",options={"maxiter":400})
+        pwcolor_complex(sol,"grey","fct slsqp",fm=False,fct=True)
+        
+    if num==12:
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        method="SLSQP",options={"maxiter":400})
+        pwcolor_complex(sol,"orange","slsqp",fm=False,fct=False)
+        
+    if num==13:
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        args=(True,True),method="L-BFGS-B",options={"maxiter":400})
+        pwcolor_complex(sol,"cyan","bfgs both fixed",fm=True,fct=True)
+
+    if num==14:
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        args=(True,False),method="L-BFGS-B",options={"maxiter":400})
+        pwcolor_complex(sol,"brown","fm bfgs",fm=True,fct=False)
+
+    if num==15:
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        args=(False,True),method="L-BFGS-B",options={"maxiter":400})
+        pwcolor_complex(sol,"pink","fct bfgs",fm=False,fct=True)
+
+    if num==16:
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        method="L-BFGS-B",options={"maxiter":400})
+        pwcolor_complex(sol,"red","bfgs",fm=False,fct=False)
+
+
     print("\n #################################\nN %i"%(num),"\n",sol)
     return True
 
-# from multiprocessing import Pool
+import json
 
-# if __name__ == '__main__':
-#     x_r=range(1,8)
-#     pool = Pool(processes=len(x_r))
-#     alidhali=input('LAUNCH ? ... \n >>>>')
-#     pool.map(run, x_r)
+def run_parallel(x):
+        meth,fm,fc,sideslip=x
+        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
+        args=(fm,fc,sideslip),method=meth,options={"maxiter":400})
+        filename="COMPLEX_meth_"+str(meth)+"_fm_"+str(fm)+"_fc_"+str(fc)+"_sideslip_"+str(sideslip)
+        with open('./scipy_solve/%s.json'%(filename), 'w') as fp:
+            json_dump={"cost":sol['fun'],"X":sol['x'].tolist()}
+            json.dump(json_dump, fp)
+        return
+
+from multiprocessing import Pool
+
+if __name__ == '__main__':
+
+    
+
+    meth_range=["SLSQP","L-BFGS-B"]   
+    fm_range=[True,False]
+    fc_range=[True,False]
+    sidslip_range=[True,False]
+
+    x_r=[[i,j,k,l] for i in meth_range for j in  fm_range  for k in fc_range for l in sidslip_range]
+
+  
+    pool = Pool(processes=len(x_r))
+    # alidhali=input('LAUNCH ? ... \n >>>>')
+    pool.map(run_parallel, x_r)
 
 
-run(int(input('LAUNCH ? ... \n >>>>')))
+
+# run(int(input('LAUNCH ? ... \n >>>>')))
 
 
 
