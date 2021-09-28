@@ -153,7 +153,7 @@ def train_model(vtype,lognmbr,optimizer="sgd",lr=1e-3):
     except:
         pass
     os.makedirs("./%s"%(dir_name))
-    tf.saved_model.save(dyn_model,"./%s"%(dir_name))
+    tf.keras.models.save_model(dyn_model,"./%s"%(dir_name))
     return True
 
 

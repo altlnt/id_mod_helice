@@ -11,6 +11,7 @@ import scipy
 from scipy import optimize
 from sklearn.utils import gen_batches
 import random
+import scipy
 
 
 # %%   ####### IMPORT DATA 
@@ -183,22 +184,6 @@ df.insert(df.shape[1],
           [i for i in delt])
 
 # %% usefuncs
-
-alpha_0=0.07
-alpha_s = 0.3391428111
-delta_s = 15.0*np.pi/180
-cd0sa_0 = 0.9
-cd0fp_0 = 0.010
-cd1sa_0 = 2
-cl1sa_0 = 5 
-cd1fp_0 = 2.5 
-coeff_drag_shift_0= 0.5 
-coeff_lift_shift_0= 0.05 
-coeff_lift_gain_0= 2.5
-C_t0 = 1.1e-4
-C_q = 1e-8
-C_h = 1e-4
-
 ct = 1.1e-4
 a_0 =  0.07
 a_s =  0.3391
@@ -223,8 +208,6 @@ coeffs_0=np.array([ct,
                    cd0fp, 
                    cd0sa, cd1sa,m])
 
-# %% OPTI SIMPLE
-# %%% usefuncs
 def pred(df_arg=df,coeffs=coeffs_0,fix_mass=False,fix_ct=False):
     
     ct,a_0, a_s, d_s, cl1sa, cd1fp, k0, k1, k2, cd0fp, cd0sa, cd1sa,m=coeffs
@@ -295,56 +278,62 @@ def pred(df_arg=df,coeffs=coeffs_0,fix_mass=False,fix_ct=False):
         new_v_pred=np.nan_to_num(new_v_pred)
         v_pred_array[i]=new_v_pred
         v_pred_current=R_array[i].T@new_v_pred
-    
+
     return v_pred_array
 
-counter=0
-def cost(X,fm=False,fct=False,nsamples=1000):
 
-    global counter
+#%% modeling with new params 
+import os 
+from scipy import sort
+import json 
+
+opti_path = "/home/mehdi/Documents/id_mod_helice/scipy_solve/"
+for name in np.sort(os.listdir(opti_path))[0:10]:
+    if ".json" in name:
+        with open(opti_path+name,'r') as f:
+            print(name)
+            opti_params = json.load(f)
+            coeff_complex =opti_params['X']    
+            
+            print(len(coeff_complex))
     
-    X0=X*coeffs_0
+#%%
+import matplotlib.pyplot as plt
+for name in np.sort(os.listdir(opti_path)):
+    if ".json" in name:
+        with open(opti_path+name,'r') as f:
+            opti_params = json.load(f)
+            coeffs =opti_params['X']
     
-    indexes_batches=list(gen_batches(len(df),len(df)//nsamples))
-    
-    idb=indexes_batches[:-1]
-    random.shuffle(idb)
-    
-    df_batches=[df[i] for i in idb]
-    c=0
-    for j,df_temp in enumerate(df_batches):
-        vpred=pred(df_arg=df_temp,coeffs=X0,fix_mass=False,fix_ct=False)
-        vlog=np.array([df_temp['speed[%i]'%(i)] for i in range(3)]).T
-        c+=np.mean(np.linalg.norm((vpred-vlog),axis=1))
-        counter+=1
-        print("cost : %f ,counter %i : %i / %i "%(c,counter,j,len(df_batches)))
-        
-        
-    list_to_print=[i for i in X]+c
-    print(str(list_to_print))
-    str_top_print="\r "
-    for i in X:
-        str_top_print=str_top_print+str(round(i,ndigits=5))+" |"
-    str_top_print=str_top_print+" "+str(round(c,ndigits=5))
-    
-    res={}
-    l="ct,a_0, a_s, d_s, cl1sa, cd1fp, k0, k1, k2, cd0fp, cd0sa, cd1sa,m"
-    for i,j in zip(l.split(","),X0):
-        res[i]=round(j,ndigits=5)       
-    res['cost']=c
-    print(res)
-    return c
+      
+        if "fm_False" in name:
+            fix_mass=False
+        else:
+            fix_mass=True
+        if "fc_False" in name:
+            fix_ct=False
+        else:
+            fix_ct=True
 
-scipy_init_x=coeffs_0
+        if "SIMPLE" in name:      
+            X0=coeffs_0
 
-
-# sol=scipy.optimize.minimize(cost,scipy_init_x,args=("True","False"))
-
-# sol=cscipy.optimize.minimize(cost,scipy_init_x,args=("False","True"))
-
-sol=scipy.optimize.minimize(cost,scipy_init_x,args=("True","True"))
-
-# sol=scipy.optimize.minimize(cost,scipy_init_x,method="SLSQP")
-
-# sol=scipy.optimize.minimize(cost,scipy_init_x)
-
+            y_pred=pred(df_arg=df,coeffs=coeffs*X0,fix_mass=fix_mass, fix_ct=fix_ct)
+            y_log=np.array([df['speed['+str(i)+']'] for i in range(3) ])
+            y_log_label="speed"
+            
+            fig=plt.figure(name)
+            fig.suptitle('Cost : '+str(opti_params['cost']))
+            for i in range(3):
+                fig.add_subplot(3,1,i+1)
+                RMS_error =  (y_pred[:,i] - y_log[i,:])**2
+                RMS_error = np.mean(RMS_error)
+                plt.plot(df['t'], y_pred[:,i], label=y_log_label+"_pred["+str(i)+"]", color='red')
+                plt.plot(df['t'], y_log[i,:], label=y_log_label+"_real["+str(i)+"]", color='black')
+                plt.title('RMS error : '+str(RMS_error))
+                plt.ylim(min(y_log[i,:]),max(y_log[i,:]))
+                plt.ylabel('Force (N)')
+                plt.xlabel('Time (s)')
+                plt.grid()
+                plt.legend()
+                
