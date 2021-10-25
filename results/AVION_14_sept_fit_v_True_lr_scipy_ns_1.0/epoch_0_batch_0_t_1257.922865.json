@@ -1,0 +1,1 @@
+{"cd0sa": 1264.1548331230447, "cd0fp": 0.009701144952069755, "cd1sa": 2.000101907877098, "cl1sa": 5.000020968406363, "cd1fp": 2.5000954922926533, "coeff_drag_shift": 0.5000799684082458, "coeff_lift_shift": 0.05000244532324195, "coeff_lift_gain": 2.500002102369465, "train_sc_a": [NaN], "train_sc_v": [NaN], "val_sc_a": 0, "val_sc_v": 0, "total_sc_a": 0, "total_sc_v": 0}

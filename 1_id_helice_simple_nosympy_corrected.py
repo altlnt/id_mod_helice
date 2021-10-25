@@ -25,7 +25,7 @@ print("LOADING DATA...")
 import pandas as pd
 
 
-log_path="./logs/vol12/log_real_processed.csv"
+log_path="./logs/copter/vol12/log_real_processed.csv"
 
 raw_data=pd.read_csv(log_path)
 

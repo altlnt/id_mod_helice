@@ -1,0 +1,1 @@
+{"cd0sa": 0.9, "cd0fp": 0.01, "cd1sa": 2.0, "cl1sa": 5.0, "cd1fp": 2.5, "coeff_drag_shift": 0.5, "coeff_lift_shift": 0.05, "coeff_lift_gain": 2.5, "train_sc_a": [9.803494389482278], "train_sc_v": [4.958573560878094], "val_sc_a": 0, "val_sc_v": 0, "total_sc_a": 0, "total_sc_v": 0}
