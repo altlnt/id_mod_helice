@@ -1,0 +1,2 @@
+timestamp,nav_roll,nav_pitch,nav_bearing,target_bearing,xtrack_error,wp_dist,acceptance_radius,yaw_acceptance,altitude_acceptance
+97076818,0.0395129,0.0,0.0,0.0,0.0,nan,20.0,nan,0.0
