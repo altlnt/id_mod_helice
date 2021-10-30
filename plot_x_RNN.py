@@ -89,10 +89,11 @@ def model(vtype,lognmbr, name_tensor):
     speed = tensor_model.predict(X)
     return speed, Y, X
   
-for i in ["speedpred_avion_log123_optimadam", "speedpred_avion_log123_optimsgd", "acc_plane"]:
+for i in ["speedpred_copter_log12_optimadam", "speedpred_copter_log12_optimsgd"]:
     name_tensor=i
-    y_pred, y_log, X=model('avion','123', name_tensor)
-    
+    y_pred, y_log, X=model('copter','12', name_tensor)
+    # y_pred, y_log, X=model('avion','123', name_tensor)
+
     import matplotlib.pyplot as plt
     
     fig=plt.figure()

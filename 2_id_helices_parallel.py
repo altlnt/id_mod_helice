@@ -16,7 +16,22 @@ import gc
 def main_func(x):
     
     # récupération des arguments
-    fit_arg,blr,ns=x[0],x[1],x[2]
+    
+    ns,with_ct3,vanilla_force_model,assume_nul_wind,di_equal_dj=x
+
+    
+    blr='scipy'
+    fit_arg=True
+    
+    ### TEST
+    
+    # fit_arg=True
+    # blr=1
+    # ns=2.0
+    # with_ct3=False
+    # vanilla_force_model=False
+    # wind_signal=False
+    # assume_nul_wind=True
     
     
     # les booleans qui déterminent plusieurs comportements, voir coms     
@@ -34,8 +49,9 @@ def main_func(x):
     # est un paramètre d'optimisation
     # sinon, le vent est considéré comme une constante
     
-    wind_signal=True
-    assume_nul_wind=False # if true, le signal de vent constant vaut zéro
+    wind_signal=False
+    
+    # assume_nul_wind=False # if true, le signal de vent constant vaut zéro
     nsecs=ns
     # nsecs désigne la taille du batch en secondes
     
@@ -45,12 +61,13 @@ def main_func(x):
     
     # log_name désigne le nom des fichiers que l'on enregistrera
     # on customisera chaque fichier avec le numero de l'epoch et la timestamp
-    log_name="3_SEPTEMBRE_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
-
+    log_name="30_oct_fit_v_%s_lr_%s_ns_%s"%(str(fit_on_v),str(base_lr) if blr!="scipy" else 'scipy',str(ns))
+    for i in 'with_ct3,vanilla_force_model,assume_nul_wind,di_equal_dj'.split(','):
+        log_name=log_name+"_%s_%s"%(i,str(eval(i)))
     #                   CI DESSOUS LES PARAMETRES PROPRES AU MODELE
     
-    with_ct3=False
-    vanilla_force_model=False
+    # with_ct3=False
+    # vanilla_force_model=False
     
     structural_relation_idc1=False
     structural_relation_idc2=False
@@ -66,7 +83,6 @@ def main_func(x):
         sys.exit()
     
     approx_x_plus_y=False
-    di_equal_dj=False
 
     #                  Ci dessous, on décide quels paramètres on souhaite identifier
     id_mass=False
@@ -81,8 +97,8 @@ def main_func(x):
     
     train_proportion=0.8 #proportion data train vs validation
     
-    log_path="./logs/vol12/log_real_processed.csv"
-    save_dir_name="results"
+    log_path="./logs/copter/vol12/log_real_processed.csv"
+    save_dir_name="res_helices_parallel_30_oct"
 
     # Paramètres utilitaires
     
@@ -101,10 +117,10 @@ def main_func(x):
     b10=14.44
     
     c10=0.0139055
-    c20=0.0386786
+    c20=-0.0386786
     c30=0.0
     ch10=0.0282942
-    ch20=0.1
+    ch20=-0.1
     di0=0.806527
     dj0=0.632052
     dk0=1.59086
@@ -349,7 +365,7 @@ def main_func(x):
         H_sum=0*k_vect
     else:
     
-        T_BET=rho*A_s*r_s*omega*(c1_s*r_s*omega-c2_s*(vi-v3)) if not with_ct3 else rho*A_s*r_s*omega*(c1_s*omega*r_s-c2_s*(vi-v3)+c3_s*v2**2)
+        T_BET=rho*A_s*r_s*omega*(c1_s*r_s*omega-c2_s*(vi-v3)) if not with_ct3 else rho*A_s*r_s*omega*(c1_s*omega*r_s-c2_s*(vi-v3))+c3_s*v2**2
         
         if structural_relation_idc1:
             T_BET=T_BET.subs(c2, b1*c1-2/b1)
@@ -361,7 +377,8 @@ def main_func(x):
         eq_MOMENTUM_simp=T_BET-T_MOMENTUM_simp
         
         eta=simplify(Matrix([solve(eq_MOMENTUM_simp,vi)[1]])).subs(v3,va_body[2,0]).subs(v2,sqrt(va_body[0,0]**2+va_body[1,0]**2))
-        
+        print(eta)
+
         etas=Matrix([eta.subs(omega,omegas[i]) for i in range(6)])
         
         def et(expr):
@@ -379,7 +396,7 @@ def main_func(x):
     di,dj,dk=symbols('di,dj,dk',real=True,positive=True)
     di_s,dj_s,dk_s=di*di_scale,dj*dj_scale,dk*dk_scale
     D=diag(di_s,di_s,dk_s) if di_equal_dj else diag(di_s,dj_s,dk_s)
-    Fa=-simplify(rho*A_s*va_NED.norm()*R@D*R.T@va_NED)
+    Fa=-simplify(rho*A_s*va_NED.norm()*R@D@(R.T@va_NED))
     
     
     t35=time.time()
@@ -892,7 +909,12 @@ def main_func(x):
         "on repasse les valeurs dans leur valeur physique "
         realvals={}
         for i in id_var.keys():
-            realvals[i]=id_var[i]*scalers[i] if ('vw' not in i) else id_var[i][0]*scalers[i]
+            if ('vw' not in i):
+                realvals[i]=id_var[i]*scalers[i]
+            elif type(id_var[i]) is np.ndarray:
+                realvals[i]=id_var[i][0]*scalers[i]
+            else:
+                realvals[i]=id_var[i]*scalers[i]
             
         if write_this_step:
             saver(name="epoch_%i_batch_%i_t_%f"%(n,k,time.time()-t0),save_path=spath,
@@ -1029,8 +1051,12 @@ def main_func(x):
                     
                     realvals={}
                     for i in id_variables.keys():
-                        realvals[i]=prepare_dict(id_variables,k)[i]*scalers[i] if ('vw' not in i) else id_variables[i][0]*scalers[i]
-
+                        if ('vw' not in i):
+                            realvals[i]=id_var[i]*scalers[i]
+                        elif type(id_var[i]) is np.ndarray:
+                            realvals[i]=id_var[i][0]*scalers[i]
+                        else:
+                            realvals[i]=id_var[i]*scalers[i]
 
 
                     if write_this_step:
@@ -1141,9 +1167,14 @@ def main_func(x):
                                                                                                       np.sqrt(np.mean(square_error_a,axis=0)),
                                                                                                       np.sqrt(np.mean(square_error_v,axis=0))))
                     realvals={}
-                    for i in id_variables.keys():
-                        realvals[i]=prepare_dict(id_variables,k)[i]*scalers[i] if ('vw' not in i) else id_variables[i][0]*scalers[i]
-                        
+                    for i in id_variables.keys():                        
+                        if ('vw' not in i):
+                            realvals[i]=id_var[i]*scalers[i]
+                        elif type(id_var[i]) is np.ndarray:
+                            realvals[i]=id_var[i][0]*scalers[i]
+                        else:
+                            realvals[i]=id_var[i]*scalers[i]
+
                     if write_this_step:
                         saver(name="epoch_%i_batch_%i"%(n,k+N_train_batches),save_path=spath,
                           id_variables=realvals,
@@ -1170,8 +1201,13 @@ def main_func(x):
             
             realvals={}
             for i in id_variables.keys():
-                realvals[i]=prepare_dict(id_variables,0)[i]*scalers[i] if ('vw' not in i) else id_variables[i][0]*scalers[i]
-    
+                if ('vw' not in i):
+                    realvals[i]=id_var[i]*scalers[i]
+                elif type(id_var[i]) is np.ndarray:
+                    realvals[i]=id_var[i][0]*scalers[i]
+                else:
+                    realvals[i]=id_var[i]*scalers[i] 
+                    
             print('\n###################################')
             print('############# END EPOCH ###########')
             print("id_variables=",realvals,
@@ -1206,19 +1242,29 @@ from multiprocessing import Pool
 
 if __name__ == '__main__':
     
-    blr_range=[0.5*10**i for i in range(0,-5,-1)]
-
     
-    ns_range=[-1]
+    ns_range=['all']
+    with_ct3_range=[True,False]
+    vanilla_force_model_range=[True,False]
+    assume_nul_wind_range=[False]
+    di_equal_dj_range=[True,False]
 
-    fit_arg_range=[True]
-
-    x_r=[[i,j,k] for j in blr_range for i in  fit_arg_range  for k in ns_range ]
+    x_r=[]
+    for i in ns_range:
+        for j in with_ct3_range:
+            for k in vanilla_force_model_range:
+                for l in assume_nul_wind_range:
+                    for p in di_equal_dj_range:
+                        if not(j and k):
+                            x_r.append([i,j,k,l,p])
+                    
+    x_r=[[i,j,k,l,p] for i in ns_range for j in with_ct3_range for k in vanilla_force_model_range for l in assume_nul_wind_range for p in di_equal_dj_range]
+    
 
     # x_r.append([False, 'scipy', -1])
 
-    x_r.append([False, 'scipy', 1])
-    x_r.append([True, 'scipy',  1])
+    # x_r.append([False, 'scipy', 1])
+    # x_r.append([True, 'scipy',  1])
     
     # x_r.append([False, 'scipy', 5])
     # x_r.append([True, 'scipy',  5])
@@ -1229,7 +1275,7 @@ if __name__ == '__main__':
     
     print(x_r,len(x_r))
 
-    pool = Pool(processes=len(x_r))
+    pool = Pool(processes=8)
     alidhali=input('LAUNCH ? ... \n >>>>')
     pool.map(main_func, x_r)
 

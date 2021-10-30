@@ -50,12 +50,12 @@ from tensorflow import keras
 
 dyn_model=tf.keras.Sequential([keras.layers.Dense(13),
     keras.layers.Dropout(rate=0.03),
-    keras.layers.Dense(13,activation="relu"),
-    keras.layers.Dropout(rate=0.03),
-    keras.layers.Dense(13,activation="relu"),
-    keras.layers.Dropout(rate=0.03),
-    keras.layers.Dense(7,activation="relu"),
-    keras.layers.Dropout(rate=0.03),
+    keras.layers.Dense(13,activation="tanh"),
+    keras.layers.Dense(13,activation="tanh"),
+    keras.layers.Dense(9,activation="tanh"),
+    keras.layers.Dense(9,activation="tanh"),
+    keras.layers.Dense(7,activation="tanh"),
+    keras.layers.Dense(5,activation="tanh"),
     keras.layers.Dense(3,activation="tanh")])
 
 
@@ -104,7 +104,7 @@ def train_model(vtype,lognmbr,optimizer="sgd",lr=1e-3):
     print(X.shape)
     Y=np.array(data_prepared[['speed[0]','speed[1]','speed[2]']])[1:]
     
-    indexes_batches=list(gen_batches(len(X),len(X)//100))
+    indexes_batches=list(gen_batches(len(X),len(X)//250))
     
     idb=indexes_batches[:-1]
     random.shuffle(idb)
@@ -162,26 +162,12 @@ lr_copt_adam=0.0001
 lr_avi_sgd=0.0005
 lr_avi_adam=0.00005
 
-
-# train_model('avion','1',optimizer="sgd",lr=lr_avi_sgd)
-# train_model('avion','2',optimizer="sgd",lr=lr_avi_sgd)
-
-# train_model('avion','3',optimizer="sgd",lr=lr_avi_sgd)
-train_model('avion','123',optimizer="sgd",lr=lr_avi_sgd)
-
-# train_model('copter','1',optimizer="sgd",lr=lr_copt_sgd)
-# train_model('copter','2',optimizer="sgd",lr=lr_copt_sgd)
-
 train_model('copter','12',optimizer="sgd",lr=lr_copt_sgd)
 
-
-# train_model('avion','1',optimizer="adam",lr=lr_avi_adam)
-# 
-# train_model('avion','2',optimizer="adam",lr=lr_avi_adam)
-# train_model('avion','3',optimizer="adam",lr=lr_avi_adam)
+train_model('copter','12',optimizer="adam",lr=lr_copt_adam)
 
 train_model('avion','123',optimizer="adam",lr=lr_avi_adam)
-# train_model('copter','1',optimizer="adam",lr=lr_copt_adam)
 
-# train_model('copter','2',optimizer="adam",lr=lr_copt_adam)
-train_model('copter','12',optimizer="adam",lr=lr_copt_adam)
+train_model('avion','123',optimizer="sgd",lr=lr_avi_sgd)
+
+

@@ -33,9 +33,9 @@ def import_data(logpath="",small_test_dataset=True):
     data_prepared=prep_data[:len(prep_data)//50] if small_test_dataset else prep_data
     for k in data_prepared.keys():
         if "speed" in k:
-            data_prepared[k]/=10.0
+            data_prepared[k]/=20.0
         if 'acc' in k:
-            data_prepared[k]/=5.0
+            data_prepared[k]/=10.0
         if 'PWM'in k: 
             data_prepared[k]=(data_prepared[k]-1500)/1000    
     
@@ -70,15 +70,15 @@ X_train, X_test, y_train, y_test = train_test_split(X_train_full, Y_train_full, 
 import tensorflow as tf
 from tensorflow import keras 
 
-copter_model=tf.keras.Sequential([keras.layers.Dense(13,activation="relu"),
+copter_model=tf.keras.Sequential([keras.layers.Dense(13),
     keras.layers.Dropout(rate=0.05),
-    keras.layers.Dense(13,activation="relu"),
+    keras.layers.Dense(13,activation="tanh"),
     keras.layers.Dropout(rate=0.05),
-    keras.layers.Dense(13),
+    keras.layers.Dense(13,activation="tanh"),
     keras.layers.Dropout(rate=0.05),
-    keras.layers.Dense(7),
+    keras.layers.Dense(7,activation="tanh"),
     keras.layers.Dropout(rate=0.05),
-    keras.layers.Dense(3,activation="tanh")])
+    keras.layers.Dense(3)])
 
 
 copter_model.compile(loss="mean_squared_error",
@@ -89,26 +89,48 @@ copter_model.compile(loss="mean_squared_error",
 
 history = copter_model.fit(X_train, y_train, epochs=10,validation_data=(X_test,y_test)) 
 
+tf.keras.models.save_model(copter_model,"./MLmodel/acc_copter")
+
+
+
     # %%% pred and plot
+copter_model=tf.keras.models.load_model("./MLmodel/acc_copter")
 
-acc_pred=copter_model.predict(X_train_full)                        
+acc_pred=copter_model.predict(X_train_full)*10                        
 
+acc_log=np.array([data_prepared['acc_ned_grad[%i]'%(i)] for i in range(3)]).T*10
 
+err_acc=acc_log-acc_pred
 
+print(" Error RMS : ",
+      np.mean(np.linalg.norm(err_acc,axis=1)))
+
+for i,s in enumerate('xyz'):
+    print(" Error RMS %s: "%(s),
+
+          np.sqrt(np.mean(err_acc[:,i]**2)))
+
+    
+    
 import matplotlib.pyplot as plt
 
 plt.figure()
 for i in range(3):
     
-    ax=plt.gcf().add_subplot(3,2,2*i+1)
+    ax=plt.subplot2grid((3, 3), (i, 0), colspan=2)
     # ax.plot(data_prepared['t'],data_prepared['acc[%i]'%(i)],color="black",label="data")
-    ax.plot(data_prepared['t'],data_prepared['acc_ned_grad[%i]'%(i)],color="blue",label="data",alpha=0.5)
+    ax.plot(data_prepared['t'],acc_log[:,i],color="blue",label="data",alpha=0.5)
 
-    ax.plot(data_prepared['t'][np.arange(len(acc_pred))],acc_pred[:,i],color="red",label="pred")
-    plt.grid()
+    ax.plot(data_prepared['t'],acc_pred[:,i],color="red",label="pred")
+    plt.grid(),plt.legend(loc=4)
+    plt.gca().set_xlabel('t')
+    plt.gca().set_ylabel('$v_{%s}$'%('xyz'[i]))
+
     
-ax=plt.gcf().add_subplot(1,2,2)
+ax=plt.subplot2grid((3, 3), (0, 2), rowspan=3)
 plot_learning_curves(ax,history)
+plt.gca().set_xlabel('epoch')
+plt.gca().set_xlabel('loss')
 
 # # %% SIMPLE feedforward model: SPEED
 #     # %%% preprocess data
