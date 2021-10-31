@@ -27,15 +27,20 @@ from scipy import optimize
 import pandas as pd
 
 
+is_sim_log=True
+
 log_path="./logs/avion/vol123/log_real_processed.csv"
+log_path="/home/l3x/Documents/Avion-Simulation-Identification/Logs/log_sim/2021_10_31_20h02m29s/log.txt"
 
 
     
 raw_data=pd.read_csv(log_path)
 
 
-
-prep_data=raw_data.drop(columns=[i for i in raw_data.keys() if (("forces" in i ) or ('pos' in i) or ("joy" in i)) ])
+if not (is_sim_log):
+    prep_data=raw_data.drop(columns=[i for i in raw_data.keys() if (("forces" in i ) or ('pos' in i) or ("joy" in i)) ])
+else :
+    prep_data=raw_data.drop(columns=[i for i in raw_data.keys() if (("forces" in i ) or ('pos' in i) ) ])
 prep_data=prep_data.drop(columns=[i for i in raw_data.keys() if (("level" in i ) or ('Unnamed' in i) or ("index" in i)) ])
 
 
@@ -60,14 +65,42 @@ def scale_to_01(df):
 
     return (df-df.min())/(df.max()-df.min())
 
-data_prepared.insert(data_prepared.shape[1],'omega_c[5]',(data_prepared['PWM_motor[5]']-1000)*925.0/1000)
+if is_sim_log:
+    
+    joystick_input=np.array([data_prepared['joystick[%i]'%(i)] for i in range(4)]).T
+    
+    print(joystick_input.shape)
+    for i in range(len(joystick_input)):
+        joystick_input[i][np.where(abs(joystick_input[i])<40)]*=0
+        if joystick_input[i][3]/250<-0.70:
+            joystick_input[i][3]=0
+        else:
+            joystick_input[i] = joystick_input[i]/250 * 200
+
+    joystick_input[:,:-1] *=500/250 #"scale from -250,250 to -500,500"
+    joystick_input[:,:-1] += 1530  # " add mean so that it's a fake pwm value, and be processed as real logs"
+
+        
+    delta_cons= np.array([joystick_input[:,0], -joystick_input[:,0], \
+                                            (joystick_input[:,1] - joystick_input[:,2]) \
+                                            , (joystick_input[:,1] + joystick_input[:,2]) ]).T
+        
+    for i in range(1,5):
+        data_prepared.insert(data_prepared.shape[1],'PWM_motor[%i]'%(i),delta_cons[:,i-1])
+        
+    data_prepared.insert(data_prepared.shape[1],'omega_c[5]',joystick_input[:,-1])
+
+else:
+    data_prepared.insert(data_prepared.shape[1],'omega_c[5]',(data_prepared['PWM_motor[5]']-1000)*925.0/1000)
+
+
+
+
 "splitting the dataset into nsecs sec minibatches"
 
 # %% Physical params
 
    
-
-
 
 Aire_1,Aire_2,Aire_3,Aire_4,Aire_0 =    0.62*0.262* 1.292 * 0.5,\
                                     0.62*0.262* 1.292 * 0.5, \
@@ -93,12 +126,12 @@ cp_list=[cp_0,cp_1,cp_2,cp_3,cp_4]
 theta=45.0/180.0/np.pi
 
 Rvd=np.array([[1.0,0.0,0.0],
-              [0.0,np.cos(theta),np.sin(theta)],
-              [0.0,-np.sin(theta),np.cos(theta)]])
+                [0.0,np.cos(theta),np.sin(theta)],
+                [0.0,-np.sin(theta),np.cos(theta)]])
 
 Rvg=np.array([[1.0,0.0,0.0],
-              [0.0,np.cos(theta),-np.sin(theta)],
-              [0.0,np.sin(theta),np.cos(theta)]])
+                [0.0,np.cos(theta),-np.sin(theta)],
+                [0.0,np.sin(theta),np.cos(theta)]])
 
 
 forwards=[np.array([1.0,0,0])]*3
@@ -108,8 +141,6 @@ forwards.append(Rvg@np.array([1.0,0,0]))
 upwards=[np.array([0.0,0,1.0])]*3
 upwards.append(Rvd@np.array([0.0,0,-1.0]))
 upwards.append(Rvg@np.array([0.0,0,-1.0]))
-
-
 
 crosswards=[np.cross(i,j) for i,j in zip(forwards,upwards)]
 
@@ -136,7 +167,7 @@ cd1fp_0 = 2.5
 coeff_drag_shift_0= 0.5 
 coeff_lift_shift_0= 0.05 
 coeff_lift_gain_0= 2.5
-C_t0 = 1.1e-4
+C_t0 = 1.1e-4 if not(is_sim_log) else 2e-4/2.0
 C_q = 1e-8
 C_h = 1e-4
 
@@ -184,16 +215,27 @@ v_body_array=np.array([(i.T@(j.T)).T for i,j in zip(R_array,v_ned_array)])
 gamma_array=np.array([(i.T@(np.array([0,0,9.81]).T)).T for i in R_array])
 
 for i in range(3):
-    df.insert(df.shape[1],
-              'speed_body[%i]'%(i),
-              v_body_array[:,i])
-    df.insert(df.shape[1],
-              'gamma[%i]'%(i),
-              gamma_array[:,i])
-    df.insert(df.shape[1],
-              'omega[%i]'%(i),
-              omegas_new[:,i])
-    
+    try:
+        df.insert(df.shape[1],
+                  'speed_body[%i]'%(i),
+                  v_body_array[:,i])
+    except:
+        pass
+    try:
+
+        df.insert(df.shape[1],
+                  'gamma[%i]'%(i),
+                  gamma_array[:,i])
+    except:
+        pass
+    try:
+
+        df.insert(df.shape[1],
+                  'omega[%i]'%(i),
+                  omegas_new[:,i])
+    except:
+        pass
+
 dragdirs=np.zeros((v_body_array.shape[0],3,5))
 liftdirs=np.zeros((v_body_array.shape[0],3,5))
 slipdirs=np.zeros((v_body_array.shape[0],3,5))
@@ -255,13 +297,13 @@ df.insert(df.shape[1],
           'thrust_dir_ned',
           [i[:,0]*j**2 for i,j in zip(df['R'],df['omega_c[5]'])])
 
-import numpy as np
 delt=np.array([df['PWM_motor[%i]'%(i)] for i in range(1,5)]).T
 delt=np.concatenate((np.zeros((len(df),1)),delt),axis=1).reshape(-1,1,5)
-delt=(delt-1530)/500*15.0/180.0*np.pi
+delt=(delt-1530)/500*15.0/180.0*np.pi 
 delt[:,:,0]*=0
 delt[:,:,2]*=-1.0
 delt[:,:,4]*=-1.0
+    
 
 df.insert(df.shape[1],
           'deltas',
@@ -834,7 +876,7 @@ def run_parallel(x):
         sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
         args=(fm,fc,sideslip),method=meth,options={"maxiter":400})
         filename="COMPLEX_meth_"+str(meth)+"_fm_"+str(fm)+"_fc_"+str(fc)+"_sideslip_"+str(sideslip)
-        with open('./scipy_solve/%s.json'%(filename), 'w') as fp:
+        with open('./scipy_solve_test/%s.json'%(filename), 'w') as fp:
             json_dump={"cost":sol['fun'],"X":sol['x'].tolist()}
             json.dump(json_dump, fp)
         return
