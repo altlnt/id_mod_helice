@@ -55,7 +55,7 @@ def main_func(x):
     nsecs=ns
     # nsecs désigne la taille du batch en secondes
     
-    model_motor_dynamics=True #si true, on fait intervernir kT
+    model_motor_dynamics=False #si true, on fait intervernir kT
 
     n_epochs=20 #le nombre d'epochs
     
@@ -98,7 +98,7 @@ def main_func(x):
     train_proportion=0.8 #proportion data train vs validation
     
     log_path="./logs/copter/vol12/log_real_processed.csv"
-    save_dir_name="res_helices_parallel_30_oct"
+    save_dir_name="res_helices_parallel_01_nov/bounds"
 
     # Paramètres utilitaires
     
@@ -157,17 +157,17 @@ def main_func(x):
     bounds['m']=(0,np.inf)
     bounds['A']=(0,np.inf)
     bounds['r']=(0,np.inf)
-    bounds['c1']=(0,np.inf)
-    bounds['c2']=(-np.inf,np.inf)
+    bounds['c1']=(0,0.1)
+    bounds['c2']=(-0.5,0.5)
     bounds['c3']=(-np.inf,np.inf)
-    bounds['ch1']=(-np.inf,np.inf)
-    bounds['ch2']=(-np.inf,np.inf)
-    bounds['di']=(0,np.inf)
-    bounds['dj']=(0,np.inf)
-    bounds['dk']=(0,np.inf)
+    bounds['ch1']=(0,0.5)
+    bounds['ch2']=(-0.5,0.5)
+    bounds['di']=(0,1.0)
+    bounds['dj']=(0,1.0)
+    bounds['dk']=(0,2.0)
     bounds['vw_i']=(-15,15)
     bounds['vw_j']=(-15,15)
-    bounds['kt']=(0,np.inf)
+    bounds['kt']=(1.5,10.0)
     
     "scaler corresponds roughly to the power of ten of the parameter"
     "it does not have to though, it may be used to improve the grad descent"
@@ -176,17 +176,17 @@ def main_func(x):
     scalers['m']=1.0
     scalers['A']=1.0
     scalers['r']=1.0
-    scalers['c1']=1.0e-2
-    scalers['c2']=1.0e-1
+    scalers['c1']=1.0
+    scalers['c2']=1.0
     scalers['c3']=1.0
-    scalers['ch1']=1e-2
-    scalers['ch2']=1e-1
+    scalers['ch1']=1.0
+    scalers['ch2']=1.0
     scalers['di']=1.0
     scalers['dj']=1.0
     scalers['dk']=1.0
     scalers['vw_i']=1.0
     scalers['vw_j']=1.0
-    scalers['kt']=1.0e2
+    scalers['kt']=1.0
     
     
     
@@ -1099,7 +1099,7 @@ def main_func(x):
                             
 
                     X_start=dict_to_X(temp_id_variables)
-                    #bnds=[bounds[i] for i in id_variables]
+                    bnds=[bounds[i] for i in id_variables]
 
 
                     writtargs=[n,k,val_sc_a,val_sc_v,total_sc_a,total_sc_v,time.time(),write_this_step,temp_id_variables]
@@ -1107,7 +1107,7 @@ def main_func(x):
                     sol_scipy=minimize(fun_cost_scipy,
                                        X_start,
                                        args=(batch_,scalers,writtargs),
-                                        method="L-BFGS-B" if ns==-1 else 'SLSQP',
+                                        bounds=bnds,
                                         jac=True)#,options={"maxiter":1})
                     
                     new_id_variables=X_to_dict(sol_scipy["x"],base_dict=temp_id_variables)
@@ -1244,8 +1244,8 @@ if __name__ == '__main__':
     
     
     ns_range=['all']
-    with_ct3_range=[True,False]
-    vanilla_force_model_range=[True,False]
+    with_ct3_range=[True]
+    vanilla_force_model_range=[False]
     assume_nul_wind_range=[False]
     di_equal_dj_range=[True,False]
 
