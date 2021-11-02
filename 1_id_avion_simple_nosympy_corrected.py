@@ -9,6 +9,10 @@ import numpy as np
 import transforms3d as tf3d
 import scipy
 from scipy import optimize
+from multiprocessing import Pool
+import json
+import matplotlib.pyplot as plt
+
 # mass=369 #batterie
 # mass+=1640-114 #corps-carton
 # mass/=1e3
@@ -27,15 +31,20 @@ from scipy import optimize
 import pandas as pd
 
 
+is_sim_log=False
+
 log_path="./logs/avion/vol123/log_real_processed.csv"
+# log_path="/home/l3x/Documents/Avion-Simulation-Identification/Logs/log_sim/2021_10_31_20h02m29s/log.txt"
 
 
     
 raw_data=pd.read_csv(log_path)
 
 
-
-prep_data=raw_data.drop(columns=[i for i in raw_data.keys() if (("forces" in i ) or ('pos' in i) or ("joy" in i)) ])
+if not (is_sim_log):
+    prep_data=raw_data.drop(columns=[i for i in raw_data.keys() if (("forces" in i ) or ('pos' in i) or ("joy" in i)) ])
+else :
+    prep_data=raw_data.drop(columns=[i for i in raw_data.keys() if (("forces" in i ) or ('pos' in i) ) ])
 prep_data=prep_data.drop(columns=[i for i in raw_data.keys() if (("level" in i ) or ('Unnamed' in i) or ("index" in i)) ])
 
 
@@ -60,14 +69,44 @@ def scale_to_01(df):
 
     return (df-df.min())/(df.max()-df.min())
 
-data_prepared.insert(data_prepared.shape[1],'omega_c[5]',(data_prepared['PWM_motor[5]']-1000)*925.0/1000)
+if is_sim_log:
+    
+    joystick_input=np.array([data_prepared['joystick[%i]'%(i)] for i in range(4)]).T
+    
+    print(joystick_input.shape)
+    for i in range(len(joystick_input)):
+        joystick_input[i][np.where(abs(joystick_input[i])<40)]*=0
+        
+        if joystick_input[i][3]/250<-0.70:
+            joystick_input[i][3]=0
+        else:
+            joystick_input[i] = joystick_input[i]/250 * 200
+
+    joystick_input[:,:-1] *=1.0/250 #"scale from -250,250 to -1,1"
+    # joystick_input[:,:-1] += 1530  # " add mean so that it's a fake pwm value, and be processed as real logs"
+
+        
+    delta_cons= 0.5*np.array([joystick_input[:,0], -joystick_input[:,0], \
+                                            (joystick_input[:,1] - joystick_input[:,2]) \
+                                            , (joystick_input[:,1] + joystick_input[:,2]) ]).T
+        
+    delta_cons = delta_cons*500 +1530
+    for i in range(1,5):
+        data_prepared.insert(data_prepared.shape[1],'PWM_motor[%i]'%(i),delta_cons[:,i-1])
+        
+    data_prepared.insert(data_prepared.shape[1],'omega_c[5]',joystick_input[:,-1])
+
+else:
+    data_prepared.insert(data_prepared.shape[1],'omega_c[5]',(data_prepared['PWM_motor[5]']-1000)*925.0/1000)
+
+
+
+
 "splitting the dataset into nsecs sec minibatches"
 
 # %% Physical params
 
    
-
-
 
 Aire_1,Aire_2,Aire_3,Aire_4,Aire_0 =    0.62*0.262* 1.292 * 0.5,\
                                     0.62*0.262* 1.292 * 0.5, \
@@ -93,12 +132,12 @@ cp_list=[cp_0,cp_1,cp_2,cp_3,cp_4]
 theta=45.0/180.0/np.pi
 
 Rvd=np.array([[1.0,0.0,0.0],
-              [0.0,np.cos(theta),np.sin(theta)],
-              [0.0,-np.sin(theta),np.cos(theta)]])
+                [0.0,np.cos(theta),np.sin(theta)],
+                [0.0,-np.sin(theta),np.cos(theta)]])
 
 Rvg=np.array([[1.0,0.0,0.0],
-              [0.0,np.cos(theta),-np.sin(theta)],
-              [0.0,np.sin(theta),np.cos(theta)]])
+                [0.0,np.cos(theta),-np.sin(theta)],
+                [0.0,np.sin(theta),np.cos(theta)]])
 
 
 forwards=[np.array([1.0,0,0])]*3
@@ -108,8 +147,6 @@ forwards.append(Rvg@np.array([1.0,0,0]))
 upwards=[np.array([0.0,0,1.0])]*3
 upwards.append(Rvd@np.array([0.0,0,-1.0]))
 upwards.append(Rvg@np.array([0.0,0,-1.0]))
-
-
 
 crosswards=[np.cross(i,j) for i,j in zip(forwards,upwards)]
 
@@ -136,7 +173,7 @@ cd1fp_0 = 2.5
 coeff_drag_shift_0= 0.5 
 coeff_lift_shift_0= 0.05 
 coeff_lift_gain_0= 2.5
-C_t0 = 1.1e-4
+C_t0 = 1.1e-4 if not(is_sim_log) else 2e-4/2.0
 C_q = 1e-8
 C_h = 1e-4
 
@@ -184,16 +221,27 @@ v_body_array=np.array([(i.T@(j.T)).T for i,j in zip(R_array,v_ned_array)])
 gamma_array=np.array([(i.T@(np.array([0,0,9.81]).T)).T for i in R_array])
 
 for i in range(3):
-    df.insert(df.shape[1],
-              'speed_body[%i]'%(i),
-              v_body_array[:,i])
-    df.insert(df.shape[1],
-              'gamma[%i]'%(i),
-              gamma_array[:,i])
-    df.insert(df.shape[1],
-              'omega[%i]'%(i),
-              omegas_new[:,i])
-    
+    try:
+        df.insert(df.shape[1],
+                  'speed_body[%i]'%(i),
+                  v_body_array[:,i])
+    except:
+        pass
+    try:
+
+        df.insert(df.shape[1],
+                  'gamma[%i]'%(i),
+                  gamma_array[:,i])
+    except:
+        pass
+    try:
+
+        df.insert(df.shape[1],
+                  'omega[%i]'%(i),
+                  omegas_new[:,i])
+    except:
+        pass
+
 dragdirs=np.zeros((v_body_array.shape[0],3,5))
 liftdirs=np.zeros((v_body_array.shape[0],3,5))
 slipdirs=np.zeros((v_body_array.shape[0],3,5))
@@ -255,13 +303,13 @@ df.insert(df.shape[1],
           'thrust_dir_ned',
           [i[:,0]*j**2 for i,j in zip(df['R'],df['omega_c[5]'])])
 
-import numpy as np
 delt=np.array([df['PWM_motor[%i]'%(i)] for i in range(1,5)]).T
 delt=np.concatenate((np.zeros((len(df),1)),delt),axis=1).reshape(-1,1,5)
-delt=(delt-1530)/500*15.0/180.0*np.pi
+delt=(delt-1530)/500*15.0/180.0*np.pi 
 delt[:,:,0]*=0
 delt[:,:,2]*=-1.0
 delt[:,:,4]*=-1.0
+    
 
 df.insert(df.shape[1],
           'deltas',
@@ -301,13 +349,13 @@ cd1sa_0 = 2
 cl1sa_0 = 5 
 cd1fp_0 = 2.5 
 coeff_drag_shift_0= 0.5 
-coeff_lift_shift_0= 0.05 
-coeff_lift_gain_0= 2.5
-C_t0 = 1.1e-4
+coeff_lift_shift_0= 0.05  if not( is_sim_log) else 0.5
+coeff_lift_gain_0= 2.5 if not( is_sim_log) else 0.5
+C_t0 = 1.1e-4 if not( is_sim_log) else 2.5e-5/2
 C_q = 1e-8
 C_h = 1e-4
 
-ct = 1.1e-4
+ct = 1.1e-4 if not( is_sim_log) else 2.5e-5/2 
 a_0 =  0.07
 a_s =  0.3391
 d_s =  15.0*np.pi/180
@@ -319,7 +367,8 @@ k2 = 0.1
 cd0fp =  1e-2
 cd0sa = 0.3
 cd1sa = 1.0
-m= 8.5
+m= 8.5 if not( is_sim_log) else 2.5
+mref= 8.5 if not( is_sim_log) else 2.5
 
 coeffs_0=np.array([ct,
                    a_0,
@@ -337,8 +386,8 @@ def dyn(df=df,coeffs=coeffs_0,fix_mass=False,fix_ct=False):
     
     ct,a_0, a_s, d_s, cl1sa, cd1fp, k0, k1, k2, cd0fp, cd0sa, cd1sa,m=coeffs
     
-    ct= 2.0*1.1e-4 if fix_ct else ct
-    m= 8.5 if fix_mass else m
+    ct= 2.0*C_t0 if fix_ct else ct
+    m= mref if fix_mass else m
     
     "compute aero coeffs "
     
@@ -383,9 +432,9 @@ def dyn(df=df,coeffs=coeffs_0,fix_mass=False,fix_ct=False):
 acc_log=np.array([df['acc[%i]'%(i)] for i in range(3)]).T
 
 
-def cost(X,fm=False,fct=False):
+def cost(X,fm=False,fct=False,scaling=True):
     
-    X0=X*coeffs_0
+    X0=X*coeffs_0 if scaling else X
     acc=dyn(df,X0,fix_mass=fm,fix_ct=fct)
     c=np.mean(np.linalg.norm((acc-acc_log),axis=1))
     # list_to_print=[i for i in X]+c
@@ -439,7 +488,6 @@ bounds=[bounds_a_0,
 bounds.insert(0, bounds_ct)
 bounds.append( bounds_mass)
 
-import matplotlib.pyplot as plt
 
 def pwcolor(sol,col="red",tit=None,fm=False,fct=False):
 
@@ -492,39 +540,43 @@ scipy_init_x=np.ones(len(coeffs_0))
 
 
     
-# def run_parallel(x):
-#         meth,fm,fc=x
-#         sol=scipy.optimize.minimize(cost,scipy_init_x,
-#         args=(fm,fc),method=meth,options={"maxiter":400})
-#         filename="SIMPLE_meth_"+str(meth)+"_fm_"+str(fm)+"_fc_"+str(fc)
-#         with open('./scipy_solve/%s.json'%(filename), 'w') as fp:
-#             json_dump={"cost":sol['fun'],"X":sol['x'].tolist()}
-#             json.dump(json_dump, fp)
+def run_parallel(x):
+        meth,fm,fc=x
+        scaling=True
+        
+        sol=scipy.optimize.minimize(cost,scipy_init_x,
+        args=(fm,fc,scaling),method=meth,options={"maxiter":400})
+        
+        filename="SIMPLE_meth_"+str(meth)+"_fm_"+str(fm)+"_fc_"+str(fc)
+        with open('./scipy_solve_test/%s.json'%(filename), 'w') as fp:
+            json_dump={"cost":sol['fun'],"X":sol['x'].tolist()}
+            json.dump(json_dump, fp)
 
-#         return
+        return
     
 # from multiprocessing import Pool
 
-# if __name__ == '__main__':
+if __name__ == '__main__':
 
     
 
-#     meth_range=["SLSQP","L-BFGS-B"]   
-#     fm_range=[True,False]
-#     fc_range=[True,False]
+    meth_range=["SLSQP","L-BFGS-B"]   
+    fm_range=[False]
+    fc_range=[False]
 
     
-#     x_r=[[i,j,k] for i in meth_range for j in  fm_range  for k in fc_range]
+    x_r=[[i,j,k] for i in meth_range for j in  fm_range  for k in fc_range]
 
   
-#     pool = Pool(processes=len(x_r))
-#     # alidhali=input('LAUNCH ? ... \n >>>>')
-#     pool.map(run_parallel, x_r)
+    # pool = Pool(processes=len(x_r))
+    # # alidhali=input('LAUNCH ? ... \n >>>>')
+    # pool.map(run_parallel, x_r)
 
 
 # run(int(input('LAUNCH ? ... \n >>>>')))
 
-
+# for i in x_r:
+#     run_parallel(i)
 
 
 
@@ -543,13 +595,13 @@ cd1sa_0 = 2
 cl1sa_0 = 5 
 cd1fp_0 = 2.5 
 coeff_drag_shift_0= 0.5 
-coeff_lift_shift_0= 0.05 
-coeff_lift_gain_0= 2.5
-C_t0 = 1.1e-4
+coeff_lift_shift_0= 0.05 if not( is_sim_log) else 0.5
+coeff_lift_gain_0= 2.5 if not( is_sim_log) else 0.5
+C_t0 = 1.1e-4 if not( is_sim_log) else 2.5e-5/2
 C_q = 1e-8
 C_h = 1e-4
 
-ct = 1.1e-4
+ct = 1.1e-4 if not( is_sim_log) else 2.5e-5/2
 a_0 =  0.07
 a_s =  0.3391
 d_s =  15.0*np.pi/180
@@ -563,7 +615,7 @@ cs= 0.5
 cl1fp=5
 cd0sa = 0.3
 cd1sa = 1.0
-m= 8.5
+m= 8.5 if not( is_sim_log) else 2.5
 
 coeffs_0_complex=np.array([ct,
                    a_0,
@@ -587,7 +639,7 @@ coeffs_0_complex=np.array([ct,
                    m])
 
 
-coeffs_0_complex=np.ones(len(coeffs_0_complex))
+# coeffs_0_complex=np.ones(len(coeffs_0_complex))
 
 # %%% funcs
 
@@ -621,8 +673,8 @@ def dyn_complex(df=df,coeffs=coeffs_0_complex,fix_mass=False,fix_ct=False,no_sli
     a_0_v, a_s_v, d_s_v, cl1sa_v, cl1fp_v, k0_v, k1_v, k2_v, cs_v, cd0fp_v, cd0sa_v, cd1sa_v, cd1fp_v, \
     m=coeffs
     
-    ct= 2.0*1.1e-4 if fix_ct else ct
-    m= 8.5 if fix_mass else m
+    ct= 2.0*C_t0 if fix_ct else ct
+    m= mref if fix_mass else m
     
     "compute aero coeffs "
     
@@ -724,122 +776,33 @@ def dyn_complex(df=df,coeffs=coeffs_0_complex,fix_mass=False,fix_ct=False,no_sli
 
 acc_log=np.array([df['acc[%i]'%(i)] for i in range(3)]).T
 
-def cost_ext(X,fm=False,fct=False,no_slip=False,verbose=True):
+def cost_ext(X,fm=False,fct=False,no_slip=False,scaling=True,verbose=True):
     
-    X0=X*coeffs_0_complex
+    X0=X*coeffs_0_complex if scaling else X
+
     acc=dyn_complex(df,X0,fix_mass=fm,fix_ct=fct,no_slip=no_slip)
     c=np.mean(np.linalg.norm((acc-acc_log),axis=1))
 
-#     res={}
-#     res['cost']=c
-#     print(res) if verbose else None
+    res={}
+    res['cost']=c
+    print(res) if verbose else None
     return c
 
 scipy_init_x_complex=np.ones(len(coeffs_0_complex))
 
 # %%% Minimize
 
-def run(num=-1):
-    
-    print("RUNNING .... ALGO  %i \n"%(num))
-    
-    if num==1:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=(True,True),method="SLSQP",options={"maxiter":400})
-        pwcolor_complex(sol,"purple","slsqp both fixed",fm=True,fct=True)
-
-    if num==2:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=(True,False),method="SLSQP",options={"maxiter":400})
-        pwcolor_complex(sol,"green","fm slsqp",fm=True,fct=False)
-
-    if num==3:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=(False,True),method="SLSQP",options={"maxiter":400})
-        pwcolor_complex(sol,"grey","fct slsqp",fm=False,fct=True)
-        
-    if num==4:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        method="SLSQP",options={"maxiter":400})
-        pwcolor_complex(sol,"orange","slsqp",fm=False,fct=False)
-        
-    if num==5:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=(True,True),method="L-BFGS-B",options={"maxiter":400})
-        pwcolor_complex(sol,"cyan","bfgs both fixed",fm=True,fct=True)
-
-    if num==6:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=(True,False),method="L-BFGS-B",options={"maxiter":400})
-        pwcolor_complex(sol,"brown","fm bfgs",fm=True,fct=False)
-
-    if num==7:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=(False,True),method="L-BFGS-B",options={"maxiter":400})
-        pwcolor_complex(sol,"pink","fct bfgs",fm=False,fct=True)
-
-    if num==8:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        method="L-BFGS-B",options={"maxiter":400})
-        pwcolor_complex(sol,"red","bfgs",fm=False,fct=False)
-
-    if num==9:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=(True,True),method="SLSQP",options={"maxiter":400})
-        pwcolor_complex(sol,"purple","slsqp both fixed",fm=True,fct=True)
-
-    if num==10:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=(True,False),method="SLSQP",options={"maxiter":400})
-        pwcolor_complex(sol,"green","fm slsqp",fm=True,fct=False)
-
-    if num==11:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=(False,True),method="SLSQP",options={"maxiter":400})
-        pwcolor_complex(sol,"grey","fct slsqp",fm=False,fct=True)
-        
-    if num==12:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        method="SLSQP",options={"maxiter":400})
-        pwcolor_complex(sol,"orange","slsqp",fm=False,fct=False)
-        
-    if num==13:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=(True,True),method="L-BFGS-B",options={"maxiter":400})
-        pwcolor_complex(sol,"cyan","bfgs both fixed",fm=True,fct=True)
-
-    if num==14:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=(True,False),method="L-BFGS-B",options={"maxiter":400})
-        pwcolor_complex(sol,"brown","fm bfgs",fm=True,fct=False)
-
-    if num==15:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=(False,True),method="L-BFGS-B",options={"maxiter":400})
-        pwcolor_complex(sol,"pink","fct bfgs",fm=False,fct=True)
-
-    if num==16:
-        sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        method="L-BFGS-B",options={"maxiter":400})
-        pwcolor_complex(sol,"red","bfgs",fm=False,fct=False)
-
-
-    print("\n #################################\nN %i"%(num),"\n",sol)
-    return True
-
-import json
-
 def run_parallel(x):
         meth,fm,fc,sideslip=x
+        scaling=True
         sol=scipy.optimize.minimize(cost_ext,scipy_init_x_complex,
-        args=(fm,fc,sideslip),method=meth,options={"maxiter":400})
+        args=(fm,fc,sideslip,scaling),method=meth,options={"maxiter":400})
         filename="COMPLEX_meth_"+str(meth)+"_fm_"+str(fm)+"_fc_"+str(fc)+"_sideslip_"+str(sideslip)
-        with open('./scipy_solve/%s.json'%(filename), 'w') as fp:
+        with open('./scipy_solve_test/%s.json'%(filename), 'w') as fp:
             json_dump={"cost":sol['fun'],"X":sol['x'].tolist()}
             json.dump(json_dump, fp)
-        return
+        return print('DONE')
 
-from multiprocessing import Pool
 
 if __name__ == '__main__':
 
@@ -856,7 +819,8 @@ if __name__ == '__main__':
     pool = Pool(processes=len(x_r))
     # alidhali=input('LAUNCH ? ... \n >>>>')
     pool.map(run_parallel, x_r)
-
+    # for i in x_r:
+    #     run_parallel(i)
 
 
 # run(int(input('LAUNCH ? ... \n >>>>')))
